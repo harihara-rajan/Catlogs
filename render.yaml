@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: tamil-ott-catalogs
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /manifest.json
+    envVars:
+      - key: TMDB_API_KEY
+        sync: false # Render asks for this value when you create the service
