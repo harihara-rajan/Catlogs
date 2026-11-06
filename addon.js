@@ -103,7 +103,7 @@ function catalogEntry(r, options) {
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.5.1',
+  version: '1.5.2',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
@@ -196,7 +196,13 @@ const arrivalStats = new Map(); // row id -> what the last arrivals check found 
 
 function recentArrivals(row, apiKey) {
   return cached(`arrivals:${row.id}`, HOUR, async () => {
-    const items = await justwatch.recent(row.edition.region, row.service.jw, row.type);
+    let items;
+    try {
+      items = await justwatch.recent(row.edition.region, row.service.jw, row.type);
+    } catch (e) {
+      arrivalStats.set(row.id, { at: new Date().toISOString(), error: e.message });
+      throw e; // not cached: tried again on the next request
+    }
     let failed = 0;
     const metas = await Promise.all(
       items.map(async (x) => {
@@ -352,7 +358,7 @@ async function warmUp() {
 module.exports = builder.getInterface();
 module.exports.EDITIONS = EDITIONS;
 module.exports.warmUp = warmUp;
-module.exports.arrivalStats = (id) => arrivalStats.get(id) || null;
+module.exports.arrivalStats = (id) => ({ row: arrivalStats.get(id) || 'not checked yet', justwatch: justwatch.status() });
 module.exports.manifestFor = manifestFor;
 module.exports.languagesFrom = languagesFrom;
 module.exports.hasServerKey = !!ENV_KEY;

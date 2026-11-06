@@ -67,7 +67,7 @@ app.get('/debug/ratings/:type/:tt', (req, res) => {
 // What the last new-arrivals check found for a row, e.g. /debug/arrivals/ta-sonyliv-movie
 app.get('/debug/arrivals/:id', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  res.json(addonInterface.arrivalStats(req.params.id) || { note: 'not checked yet' });
+  res.json(addonInterface.arrivalStats(req.params.id));
 });
 
 // Catalogs and details: the SDK's own routes.
