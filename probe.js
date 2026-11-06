@@ -2,21 +2,14 @@ const JW = 'https://apis.justwatch.com/graphql';
 const gql = async (query, variables) => { const r = await fetch(JW, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Mozilla/5.0' }, body: JSON.stringify({ query, variables }) }); return r.json(); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
-  // 1. Do offers carry audio languages? Known Hindi films with Tamil dubs.
-  for (const q of ['Jawan', 'Animal', 'Manjummel Boys', 'Aavesham']) {
-    const r = await gql(`query($q: String!) { popularTitles(country: IN, filter: { searchQuery: $q, objectTypes: [MOVIE] }, first: 1) { edges { node { content(country: IN, language: en) { title originalReleaseYear } offers(country: IN, platform: WEB) { monetizationType audioLanguages subtitleLanguages package { shortName } } } } } }`, { q });
-    if (r.errors) { console.log(q, 'ERR', JSON.stringify(r.errors).slice(0, 300)); continue; }
-    const n = r.data.popularTitles.edges[0].node;
-    console.log(n.content.title, n.content.originalReleaseYear, '->', n.offers.filter((o) => o.monetizationType !== 'RENT' && o.monetizationType !== 'BUY').map((o) => `${o.package.shortName}:${JSON.stringify(o.audioLanguages)}`).join(' '));
-    await sleep(1500);
+  for (const p of ['nfx', 'prv', 'jhs', 'snl', 'zee', 'aha', 'snx', 'mrx']) {
+    const r = await gql(`query($p: [String!]) { popularTitles(country: IN, filter: { packages: $p, objectTypes: [MOVIE] }, first: 100, sortBy: POPULAR) { totalCount edges { node { content(country: IN, language: en) { title } offers(country: IN, platform: WEB, filter: { packages: $p }) { monetizationType audioLanguages } } } } }`, { p: [p] });
+    if (r.errors) { console.log(p, 'ERR', JSON.stringify(r.errors).slice(0, 200)); await sleep(2000); continue; }
+    const e = r.data.popularTitles.edges;
+    const sub = e.map((x) => x.node.offers.filter((o) => ['FLATRATE', 'ADS', 'FREE'].includes(o.monetizationType)));
+    const withAudio = sub.filter((os) => os.some((o) => o.audioLanguages && o.audioLanguages.length)).length;
+    const withTa = e.filter((x, i) => sub[i].some((o) => (o.audioLanguages || []).includes('ta')));
+    console.log(p.padEnd(4), 'catalogue', String(r.data.popularTitles.totalCount).padStart(6), '| top 100: audio listed for', String(withAudio).padStart(3), '| with Tamil audio', String(withTa.length).padStart(3), '|', withTa.slice(0, 5).map((x) => x.node.content.title).join(', '));
+    await sleep(2000);
   }
-  // 2. Can the title filter select by audio language? (error messages hint at valid fields)
-  for (const f of ['audioLanguages: ["ta"]', 'languages: ["ta"]', 'originalLanguage: "ml"', 'originalLanguages: ["ml"]', 'audioLanguage: "ta"']) {
-    const r = await gql(`query { popularTitles(country: IN, filter: { ${f}, packages: ["nfx"], objectTypes: [MOVIE] }, first: 3) { totalCount edges { node { content(country: IN, language: en) { title } } } } }`);
-    console.log('filter', f, '->', r.errors ? 'ERR ' + r.errors.map((e) => e.message).join(' ').slice(0, 200) : `total ${r.data.popularTitles.totalCount}: ` + r.data.popularTitles.edges.map((e) => e.node.content.title).join(', '));
-    await sleep(1500);
-  }
-  // 3. Content field for original language?
-  const r = await gql(`query { popularTitles(country: IN, filter: { searchQuery: "Jawan" }, first: 1) { edges { node { content(country: IN, language: en) { title originalLanguage } } } } }`);
-  console.log('content.originalLanguage ->', JSON.stringify(r).slice(0, 300));
 })();
