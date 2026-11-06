@@ -23,13 +23,14 @@ const SERVICES = {
 
 // The tick boxes on the install page, in the order their rows appear. `lang` = TMDB original
 // language, `region` = country whose streaming catalogues are used, `defaultSort` = how rows are
-// ordered when nothing is picked in the dropdown (Newest if not set).
+// ordered when nothing is picked in the dropdown (Newest if not set), `newThisWeek` = also add
+// "New This Week" rows (titles that arrived on any of the services in the last 7 days).
 const EDITIONS = [
-  { code: 'ta', name: 'Tamil', lang: 'ta', region: 'IN', types: ['movie', 'series'],
+  { code: 'ta', name: 'Tamil', lang: 'ta', region: 'IN', types: ['movie', 'series'], newThisWeek: true,
     services: ['prime', 'aha', 'netflix', 'sonyliv', 'sunnxt', 'jiohotstar', 'zee5'] },
-  { code: 'ml', name: 'Malayalam', lang: 'ml', region: 'IN', types: ['movie'],
+  { code: 'ml', name: 'Malayalam', lang: 'ml', region: 'IN', types: ['movie'], newThisWeek: true,
     services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5', 'manoramamax'] },
-  { code: 'hi', name: 'Hindi', lang: 'hi', region: 'IN', types: ['movie', 'series'],
+  { code: 'hi', name: 'Hindi', lang: 'hi', region: 'IN', types: ['movie', 'series'], newThisWeek: true,
     services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5'] },
   { code: 'en-in', name: 'English (India)', rowLabel: 'English (IN)', lang: 'en', region: 'IN', types: ['movie', 'series'], defaultSort: 'Popular',
     services: ['netflix', 'prime', 'jiohotstar', 'appletv', 'sonyliv', 'lionsgate'] },

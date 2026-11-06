@@ -70,6 +70,12 @@ app.get('/debug/arrivals/:id', (req, res) => {
   res.json(addonInterface.arrivalStats(req.params.id));
 });
 
+// What the last build of a "New This Week" row found, e.g. /debug/week/ta-new-movie
+app.get('/debug/week/:id', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(addonInterface.weekStats(req.params.id));
+});
+
 // What the last build of a dubbed row found, e.g. /debug/dubs/ta-dub-movie
 app.get('/debug/dubs/:id', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');

@@ -45,8 +45,12 @@ const HOUR = 3600 * 1000;
 const ENV_KEY = process.env.TMDB_API_KEY || '';
 
 // Every possible row. Tamil keeps its original ids (ta-netflix-movie) so old installs still work.
-const ROWS = EDITIONS.flatMap((e) =>
-  e.services.flatMap((key) =>
+// Each language's "New This Week" rows come first, then one row per service.
+const ROWS = EDITIONS.flatMap((e) => [
+  ...(e.newThisWeek
+    ? e.types.map((type) => ({ id: `${e.code}-new-${type}`, type, name: `New This Week · ${e.rowLabel || e.name}`, edition: e, newWeek: true }))
+    : []),
+  ...e.services.flatMap((key) =>
     e.types.map((type) => ({
       id: `${e.code}-${key}-${type}`,
       type,
@@ -55,8 +59,8 @@ const ROWS = EDITIONS.flatMap((e) =>
       serviceKey: key,
       service: SERVICES[key][e.region],
     }))
-  )
-);
+  ),
+]);
 // One movies row per "dubbed" tick box, e.g. ta-dub-movie.
 for (const e of DUB_EDITIONS) {
   ROWS.push({ id: `${e.code}-movie`, type: 'movie', name: e.rowName, edition: e, dub: true });
@@ -64,6 +68,7 @@ for (const e of DUB_EDITIONS) {
 const ROW_BY_ID = new Map(ROWS.map((r) => [r.id, r]));
 // The row's default sort goes first in its dropdown.
 function catalogEntry(r, options) {
+  if (r.newWeek) return { type: r.type, id: r.id, name: r.name, extra: [{ name: 'skip' }] }; // no dropdown
   const first = r.edition.defaultSort || 'Newest';
   const opts = options && [first, ...options.filter((o) => o !== first)];
   return {
@@ -77,7 +82,7 @@ function catalogEntry(r, options) {
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.7.0',
+  version: '1.8.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
@@ -205,6 +210,7 @@ async function getCatalog(type, id, extra, apiKey) {
   const row = ROW_BY_ID.get(id);
   if (!row || row.type !== type || !apiKey) return { metas: [], partial: false };
   if (row.dub) return getDubCatalog(row, extra, apiKey);
+  if (row.newWeek) return getWeekCatalog(row, extra, apiKey);
   const choice = (extra && extra.genre) || row.edition.defaultSort || 'Newest';
   const range = rangeOf(choice);
 
@@ -371,13 +377,66 @@ async function getDubCatalog(row, extra, apiKey) {
   };
 }
 
+// ---------------------------------------------------------------------------------------------
+// "New This Week" rows: titles in the row's language that arrived on any of its services in the
+// last 7 days (from the new-arrivals file), most recent arrival first. Titles that only turned up
+// on a "bulk" day (JustWatch re-listing a catalogue) count only if released in the last 2 years.
+// ---------------------------------------------------------------------------------------------
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const shortDate = (d) => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]}`;
+const weekStats = new Map();
+
+function weekList(row, apiKey) {
+  return cached(`week:${row.id}`, 20 * 60 * 1000, async () => {
+    const e = row.edition;
+    const services = e.services.map((key) => ({ key, jw: SERVICES[key][e.region].jw }));
+    const found = await justwatch.arrivalsByTitle(e.region, services, row.type);
+    const since = new Date(Date.now() - 6 * 24 * HOUR).toISOString().slice(0, 10);
+    let failed = 0;
+    const metas = await Promise.all(
+      [...found].filter(([, x]) => x.added >= since).map(async ([tmdbId, x]) => {
+        try {
+          const d = await tmdb.details(row.type, tmdbId, apiKey);
+          const released = dateOf(d);
+          if (d.original_language !== e.lang || !released || released > today()) return null;
+          if (x.bulk) {
+            const twoYearsBefore = new Date(Date.parse(x.added) - 730 * 24 * HOUR).toISOString().slice(0, 10);
+            if (released < twoYearsBefore) return null;
+          }
+          const m = await toMeta(d, row.type, apiKey, x.imdbId);
+          const on = e.services.filter((k) => x.services.has(k)).map((k) => SERVICES[k].name);
+          m.description = `New on ${on.join(', ')} · ${shortDate(x.added)}${m.description ? '\n\n' + m.description : ''}`;
+          m._added = x.added;
+          m._pop = d.popularity || 0;
+          return m;
+        } catch (err) {
+          if (!/ 404 /.test(err.message)) failed++;
+          return null;
+        }
+      })
+    );
+    const list = metas.filter(Boolean).sort((a, b) => (a._added < b._added ? 1 : a._added > b._added ? -1 : b._pop - a._pop));
+    weekStats.set(row.id, { at: new Date().toISOString(), candidates: found.size, kept: list.length, failed });
+    if (failed) throw new Error(`${failed} TMDB lookups failed for ${row.id}`);
+    return list;
+  });
+}
+
+async function getWeekCatalog(row, extra, apiKey) {
+  if (Number((extra && extra.skip) || 0) > 0) return { metas: [], partial: false }; // one page
+  const list = await within(8000, weekList(row, apiKey), null);
+  if (!list) return { metas: [], partial: true };
+  return { metas: list.map(({ _added, _pop, ...m }) => clean(m)), partial: false };
+}
+
 // Loads the first page of every row (default view) so rows open instantly. New arrivals are
 // prepared first, and only for rows whose default view uses them (Newest), Indian rows first.
 async function warmUp() {
   if (!ENV_KEY) return;
   const started = Date.now();
+  for (const r of ROWS.filter((r) => r.newWeek)) await weekList(r, ENV_KEY).catch((e) => console.error('new this week:', e.message));
   for (const r of ROWS.filter((r) => r.dub)) await dubList(r, ENV_KEY).catch((e) => console.error('dubs:', e.message));
-  for (const r of ROWS.filter((r) => !r.dub && (r.edition.defaultSort || 'Newest') === 'Newest')) {
+  for (const r of ROWS.filter((r) => !r.dub && !r.newWeek && (r.edition.defaultSort || 'Newest') === 'Newest')) {
     await recentArrivals(r, ENV_KEY).catch((e) => console.error('arrivals:', e.message));
   }
   const results = await Promise.allSettled(
@@ -389,6 +448,7 @@ async function warmUp() {
 
 module.exports = builder.getInterface();
 module.exports.EDITIONS = TICK_BOXES;
+module.exports.weekStats = (id) => ({ row: weekStats.get(id) || 'not built yet', file: justwatch.status() });
 module.exports.dubStats = (id) => ({ row: dubStats.get(id) || 'not built yet', file: dubs.status() });
 module.exports.warmUp = warmUp;
 module.exports.arrivalStats = (id) => ({ row: arrivalStats.get(id) || 'not checked yet', justwatch: justwatch.status() });

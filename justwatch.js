@@ -48,6 +48,35 @@ async function recent(country, packages, type) {
   return out;
 }
 
+// Everything of `type` that arrived on any of `services` in the file's days (the last ~8):
+// Map(tmdbId -> { imdbId, added: 'YYYY-MM-DD' (most recent), services: Set(key), bulk }).
+// bulk = it arrived on a day when the service added an unusually large number of titles, which is
+// usually JustWatch re-listing an existing catalogue rather than genuinely new arrivals.
+const BULK_DAY = 40;
+async function arrivalsByTitle(country, services, type) {
+  const f = await file();
+  const out = new Map();
+  for (const { key, jw } of services) {
+    const days = f.sets[`${country}:${jw.join(',')}`];
+    if (!days) continue;
+    for (const [date, list] of Object.entries(days)) {
+      const bulk = list.length > BULK_DAY;
+      for (const [t, tmdbId, imdbId] of list) {
+        if (t !== type) continue;
+        const e = out.get(tmdbId);
+        if (!e) {
+          out.set(tmdbId, { imdbId, added: date, services: new Set([key]), bulk });
+          continue;
+        }
+        e.services.add(key);
+        if (!e.imdbId && imdbId) e.imdbId = imdbId;
+        if (date > e.added) { e.added = date; e.bulk = bulk; }
+      }
+    }
+  }
+  return out;
+}
+
 const status = () => ({ source: URL_, file: lastFile, lastError });
 
-module.exports = { recent, status };
+module.exports = { recent, arrivalsByTitle, status };

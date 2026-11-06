@@ -12,6 +12,11 @@ language and service. You pick the languages on the install page (`/configure`):
 | English (US)    | US      | Netflix · Prime Video · Disney+ · HBO Max · Hulu · Apple TV · Paramount+ · Peacock |
 | Tamil dubbed (Malayalam & Hindi) | India | One movies row: Malayalam and Hindi films with a Tamil audio track on Prime Video · JioHotstar · SonyLIV · ZEE5 · aha |
 
+Tamil, Malayalam and Hindi also get **New This Week** rows at the top: titles in that language that
+arrived on any of its services in the last 7 days, most recent first, with where and when in the
+description. JustWatch sometimes re-lists a whole catalogue in one day; titles that only appear on
+such a day count only if released in the last two years. Check with `/debug/week/ta-new-movie`.
+
 The **Tamil dubbed** row uses the audio languages JustWatch records for each streaming offer. The
 GitHub job re-scans those services' movie catalogues about once a day (`scripts/fetch-dubs.js`,
 published as `dubs.json` on the `data` branch). Netflix and Sun NXT don't share audio languages
