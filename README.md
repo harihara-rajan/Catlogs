@@ -49,6 +49,16 @@ TMDB alone.
 
 ---
 
+## Look
+
+- Original icon and background (`assets.js`, drawn at start-up: `/logo.png`, `/background.jpg`).
+- Row names lead with the language: "Tamil · Prime Video", "🆕 New This Week · Tamil",
+  "🎙️ Tamil Dubbed · Malayalam & Hindi".
+- **New This Week** rows are wide "hero" banners (`banner.js`): the film's TMDB backdrop with
+  title, IMDb rating, year, genre, service tag and "NEW · 2d" (no backdrop → blurred poster).
+- In the service rows, titles that arrived on that service in the last 7 days get a
+  "NEW · 2d" ribbon on the poster.
+
 ## Ratings on posters
 
 Each poster gets a small strip with its **IMDb** rating, plus the **Rotten Tomatoes** critics score
@@ -136,7 +146,9 @@ variables → Actions**). Without the secret, use **Manual Deploy → Deploy lat
 - `server.js` — HTTP server (port `PORT`, default 7000): manifests, install page, warm-up, keep-awake
 - `configure.js` — the install page
 - `imdb-ratings.js`, `mdblist.js` — IMDb and Rotten Tomatoes ratings
-- `poster.js` — posters with rating badges
+- `poster.js` — posters with rating badges, service tags and NEW ribbons
+- `banner.js` — wide banners for the New This Week rows
+- `assets.js` — the addon's icon and background
 - `justwatch.js` — reads the new-arrivals file
 - `services.js` — services per country and the tick boxes
 - `scripts/fetch-arrivals.js`, `scripts/fetch-dubs.js` — the GitHub job that collects new arrivals and dubbed audio tracks from JustWatch

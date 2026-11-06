@@ -2,6 +2,7 @@ const express = require('express');
 const { getRouter } = require('stremio-addon-sdk');
 const addonInterface = require('./addon');
 const configurePage = require('./configure');
+const assets = require('./assets');
 const poster = require('./poster');
 const imdbRatings = require('./imdb-ratings');
 const mdblist = require('./mdblist');
@@ -38,7 +39,7 @@ function sendConfigure(req, res) {
   res.setHeader('Cache-Control', 'no-cache');
   res.end(
     configurePage({
-      languages: addonInterface.EDITIONS,
+      languages: addonInterface.EDITIONS.map((e) => ({ code: e.code, name: e.name, desc: addonInterface.describe(e) })),
       selected: addonInterface.languagesFrom(config),
       needsKey: !addonInterface.hasServerKey,
       version: addonInterface.manifest.version,
@@ -46,12 +47,17 @@ function sendConfigure(req, res) {
   );
 }
 app.get('/', (_, res) => res.redirect('/configure'));
+app.get('/logo.png', assets.logoRoute);
+app.get('/background.jpg', assets.backgroundRoute);
 app.get('/configure', sendConfigure);
 app.get('/:config/configure', sendConfigure);
 
 // Posters with rating badges.
 app.get('/poster/:tt/:ratings/:file', poster.handler);
 app.get('/poster/:tt/:ratings/:services/:file', poster.handler);
+
+// Wide banners for the New This Week rows.
+app.get('/banner/:type/:tmdbId/:imdb/:services/:days.jpg', require('./banner').handler);
 
 // What the server knows about a title's ratings, and the state of the rating sources.
 app.get('/debug/ratings/:type/:tt', (req, res) => {

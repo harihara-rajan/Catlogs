@@ -43,7 +43,7 @@ const EDITIONS = [
 // tracks comes from JustWatch (scripts/fetch-dubs.js); Netflix and Sun NXT don't share that, so
 // they can't be included.
 const DUB_EDITIONS = [
-  { code: 'ta-dub', name: 'Tamil dubbed (Malayalam & Hindi)', shortName: 'Tamil dubbed', rowName: 'Tamil Dubbed (Malayalam & Hindi)',
+  { code: 'ta-dub', name: 'Tamil dubbed (Malayalam & Hindi)', shortName: 'Tamil dubbed', rowName: '🎙️ Tamil Dubbed · Malayalam & Hindi',
     audio: 'ta', originalLangs: ['ml', 'hi'], region: 'IN',
     services: ['prime', 'jiohotstar', 'sonyliv', 'zee5', 'aha'] },
 ];

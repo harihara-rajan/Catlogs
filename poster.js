@@ -1,6 +1,7 @@
-// Posters with rating badges: the TMDB poster with an IMDb / Rotten Tomatoes strip drawn along
-// the bottom, and (in rows that mix services) a service tag in the top-right corner. Text is turned into vector shapes from the bundled font (assets/Inter-Bold.otf), so
-// it doesn't depend on fonts being installed on the server.
+// Posters with badges, drawn on the TMDB poster: an IMDb (/ Rotten Tomatoes) strip along the
+// bottom, a service tag in the top-right corner (rows that mix services), and a "NEW · 2d" ribbon
+// for recent arrivals. Text is turned into vector shapes from the bundled font
+// (assets/Inter-Bold.otf), so it doesn't depend on fonts being installed on the server.
 //
 // The ratings are part of the poster's address (/poster/tt123/78-92/abc.jpg), so a poster never
 // changes once made: Stremio and the server can cache it for good, and when a score arrives the
@@ -16,7 +17,7 @@ sharp.cache(false);
 
 const font = opentype.loadSync(path.join(__dirname, 'assets', 'Inter-Bold.otf'));
 const TMDB_IMG = process.env.TMDB_IMG_BASE || 'https://image.tmdb.org/t/p';
-const DESIGN = 2; // bump when the badge drawing changes (2: service tag moved to the right)
+const DESIGN = 3; // bump when the badge drawing changes (2: service tag right; 3: NEW ribbon)
 const SIZE = 'w342';
 const rendering = limiter(2);
 
@@ -72,8 +73,25 @@ function serviceTag(k, w, services) {
     ${textPath(label, x + 12 * k, y + h / 2 + size * 0.36, size, tag.fg)}`;
 }
 
+// "NEW · today" / "NEW · 3d"
+const newLabel = (days) => `NEW · ${days === 0 ? 'today' : `${days}d`}`;
+
+// White "NEW · 2d" chip in a top corner (right, unless a service tag is there).
+function newRibbon(k, w, days, left) {
+  if (days == null) return '';
+  const label = newLabel(days);
+  const size = 18 * k;
+  const h = 35 * k;
+  const tw = textWidth(label, size) + 22 * k;
+  const x = left ? 9 * k : w - 9 * k - tw;
+  const y = 9 * k;
+  return `<rect x="${x}" y="${y}" width="${tw}" height="${h}" rx="${8 * k}" fill="#fff"/>
+    <rect x="${x}" y="${y}" width="${tw}" height="${h}" rx="${8 * k}" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="${1.5 * k}"/>
+    ${textPath(label, x + 11 * k, y + h / 2 + size * 0.36, size, '#15121c')}`;
+}
+
 // SVG overlay (same size as the poster): ratings strip at the bottom, service tag at the top.
-function overlay(w, h, imdb, rt, services = []) {
+function overlay(w, h, imdb, rt, services = [], newDays = null) {
   const k = w / 342; // designed at 342 px wide
   const pad = 9 * k;
   const stripH = 48 * k;
@@ -112,17 +130,18 @@ function overlay(w, h, imdb, rt, services = []) {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
       ${strip}
       ${serviceTag(k, w, services)}
+      ${newRibbon(k, w, newDays, services.length > 0)}
     </svg>`
   );
 }
 
-async function render(file, imdb, rt, services) {
+async function render(file, imdb, rt, services, newDays) {
   const res = await fetch(`${TMDB_IMG}/${SIZE}/${file}`, { signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error(`poster ${res.status}`);
   const img = sharp(Buffer.from(await res.arrayBuffer()));
   const { width, height } = await img.metadata();
   return img
-    .composite([{ input: overlay(width, height, imdb, rt, services), top: 0, left: 0 }])
+    .composite([{ input: overlay(width, height, imdb, rt, services, newDays), top: 0, left: 0 }])
     .jpeg({ quality: 82, progressive: true })
     .toBuffer();
 }
@@ -144,15 +163,17 @@ function parseServices(s) {
 
 // Address of the badged poster for a meta, or the plain poster if there's nothing to show.
 // services: service keys to tag the poster with (only for rows that mix services).
-function posterUrl(baseUrl, tt, tmdbPosterUrl, imdb, rt, services = []) {
+// newDays: days since it arrived on the service (0 = today) for a "NEW" ribbon, or null.
+function posterUrl(baseUrl, tt, tmdbPosterUrl, imdb, rt, services = [], newDays = null) {
   const m = /\/([A-Za-z0-9_-]+\.(?:jpg|png))$/.exec(tmdbPosterUrl || '');
   const tags = services.filter((x) => TAGS[x]);
-  if (!baseUrl || !m || !/^tt\d+$/.test(tt || '') || (imdb == null && rt == null && !tags.length)) return tmdbPosterUrl;
+  if (!baseUrl || !m || !/^tt\d+$/.test(tt || '') || (imdb == null && rt == null && !tags.length && newDays == null)) return tmdbPosterUrl;
   const code = `${imdb == null ? 'n' : Math.round(imdb * 10)}-${rt == null ? 'n' : rt}`;
   // ?v= changes whenever the drawing changes, so apps re-fetch posters they've cached for good.
+  const q = `?v=${DESIGN}${newDays != null ? `&n=${newDays}` : ''}`;
   return tags.length
-    ? `${baseUrl}/poster/${tt}/${code}/${tags.join('+')}/${m[1]}?v=${DESIGN}`
-    : `${baseUrl}/poster/${tt}/${code}/${m[1]}?v=${DESIGN}`;
+    ? `${baseUrl}/poster/${tt}/${code}/${tags.join('+')}/${m[1]}${q}`
+    : `${baseUrl}/poster/${tt}/${code}/${m[1]}${q}`;
 }
 
 // Express handler for /poster/:tt/:ratings/:file and /poster/:tt/:ratings/:services/:file
@@ -160,12 +181,14 @@ async function handler(req, res) {
   const { tt, ratings, file } = req.params;
   const r = parseRatings(ratings);
   const services = parseServices(req.params.services);
+  const n = req.query && req.query.n;
+  const newDays = /^\d{1,2}$/.test(n || '') ? Number(n) : null;
   if (!/^tt\d+$/.test(tt) || !r || !services || !/^[A-Za-z0-9_-]+\.(jpg|png)$/.test(file)) return res.status(404).end();
-  const key = `${ratings}/${services.join('+') || '-'}/${file}`;
+  const key = `${ratings}/${services.join('+') || '-'}/${newDays ?? '-'}/${file}`;
   try {
     let buf = made.get(key);
     if (!buf) {
-      buf = await rendering(() => render(file, r.imdb, r.rt, services));
+      buf = await rendering(() => render(file, r.imdb, r.rt, services, newDays));
       made.set(key, buf);
       if (made.size > MAX) made.delete(made.keys().next().value);
     }
@@ -179,4 +202,4 @@ async function handler(req, res) {
   }
 }
 
-module.exports = { handler, posterUrl, overlay, render };
+module.exports = { handler, posterUrl, overlay, render, TAGS, textPath, textWidth, newLabel, made, MAX, rendering, TMDB_IMG };

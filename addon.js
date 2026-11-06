@@ -5,6 +5,7 @@ const { cached, within } = require('./cache');
 const imdbRatings = require('./imdb-ratings');
 const mdblist = require('./mdblist');
 const poster = require('./poster');
+const banner = require('./banner');
 
 const { SERVICES, EDITIONS, DUB_EDITIONS } = require('./services');
 const dubs = require('./dubs');
@@ -49,13 +50,13 @@ const ENV_KEY = process.env.TMDB_API_KEY || '';
 // "New This Week" rows at the very top).
 const ROWS = EDITIONS.flatMap((e) => [
   ...(e.newThisWeek
-    ? e.types.map((type) => ({ id: `${e.code}-new-${type}`, type, name: `New This Week · ${e.rowLabel || e.name}`, edition: e, newWeek: true }))
+    ? e.types.map((type) => ({ id: `${e.code}-new-${type}`, type, name: `🆕 New This Week · ${e.rowLabel || e.name}`, edition: e, newWeek: true }))
     : []),
   ...e.services.flatMap((key) =>
     e.types.map((type) => ({
       id: `${e.code}-${key}-${type}`,
       type,
-      name: `${SERVICES[key].name} ${e.rowLabel || e.name}`,
+      name: `${e.rowLabel || e.name} · ${SERVICES[key].name}`,
       edition: e,
       serviceKey: key,
       service: SERVICES[key][e.region],
@@ -80,13 +81,17 @@ function catalogEntry(r, options) {
   };
 }
 
+// This server's public address (Render sets RENDER_EXTERNAL_URL), for links to its own images.
+const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 'https://tamil-ott-catalogs.onrender.com').replace(/\/$/, '');
+
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.9.2',
+  version: '2.0.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
-  logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
+  logo: `${PUBLIC_BASE}/logo.png`,
+  background: `${PUBLIC_BASE}/background.jpg`,
   types: ['movie', 'series'],
   idPrefixes: ['tmdb:'],
   resources: ['catalog', { name: 'meta', types: ['movie', 'series'], idPrefixes: ['tmdb:'] }],
@@ -122,7 +127,7 @@ function manifestFor(config) {
   const rows = [...chosen.filter((r) => r.newWeek), ...chosen.filter((r) => !r.newWeek)];
   for (const options of DROPDOWN_TIERS) {
     m.catalogs = rows.map((r) => catalogEntry(r, options));
-    if (JSON.stringify(m).length <= MAX_MANIFEST) break;
+    if (Buffer.byteLength(JSON.stringify(m)) <= MAX_MANIFEST) break;
   }
   return m;
 }
@@ -208,6 +213,29 @@ function recentArrivals(row, apiKey) {
 
 const keyFrom = (config) => (config && config.tmdbApiKey ? String(config.tmdbApiKey).trim() : ENV_KEY);
 
+// Days since a YYYY-MM-DD date (0 = today).
+const daysSince = (d) => Math.max(0, Math.round((Date.parse(today()) - Date.parse(d)) / (24 * HOUR)));
+
+// Marks titles that arrived on this row's service in the last 7 days (m._newDays) for a "NEW"
+// ribbon. Titles seen only on a "bulk" day (JustWatch re-listing a catalogue) count only if
+// released in the last two years. If the arrivals file isn't available, nothing is marked.
+async function markNew(row, metas) {
+  if (!row.service) return metas;
+  try {
+    const found = await justwatch.arrivalsByTitle(row.edition.region, [{ key: row.serviceKey, jw: row.service.jw }], row.type);
+    const since = new Date(Date.now() - 6 * 24 * HOUR).toISOString().slice(0, 10);
+    for (const m of metas) {
+      const x = found.get(m._tmdb);
+      if (!x || x.added < since) continue;
+      if (x.bulk && m._date < new Date(Date.parse(x.added) - 730 * 24 * HOUR).toISOString().slice(0, 10)) continue;
+      m._newDays = daysSince(x.added);
+    }
+  } catch {
+    // no ribbons this time
+  }
+  return metas;
+}
+
 // -> { metas, partial }; partial = new arrivals should have been merged in but weren't ready yet.
 async function getCatalog(type, id, extra, apiKey) {
   const row = ROW_BY_ID.get(id);
@@ -244,19 +272,20 @@ async function getCatalog(type, id, extra, apiKey) {
 
   const listed = page > (data.total_pages || 0) ? [] : await Promise.all((data.results || []).map((it) => toMeta(it, type, apiKey)));
   const partial = arrivals === null;
-  if (!arrivals || !arrivals.length) return { metas: listed.map(clean), partial };
+  if (!arrivals || !arrivals.length) return { metas: (await markNew(row, listed)).map(clean), partial };
 
   const have = new Set(listed.map((x) => x._tmdb));
   let extra_ = arrivals.filter((a) => !have.has(a._tmdb));
   if (range) {
     extra_ = extra_.filter((a) => a._date >= range[0] && a._date <= range[1]);
-    return { metas: [...extra_, ...listed].map(clean), partial };
+    return { metas: (await markNew(row, [...extra_, ...listed])).map(clean), partial };
   }
   // Newest: slot arrivals into release-date order, but only those that belong on this first page.
   const full = listed.length >= PAGE_SIZE;
   const oldest = full ? listed[listed.length - 1]._date : '';
   extra_ = extra_.filter((a) => a._date >= oldest);
-  return { metas: [...listed, ...extra_].sort((a, b) => (a._date < b._date ? 1 : a._date > b._date ? -1 : 0)).map(clean), partial };
+  const merged = [...listed, ...extra_].sort((a, b) => (a._date < b._date ? 1 : a._date > b._date ? -1 : 0));
+  return { metas: (await markNew(row, merged)).map(clean), partial };
 }
 
 // Public address of this server, for badged poster links (Render sets RENDER_EXTERNAL_URL).
@@ -269,20 +298,27 @@ const showsRottenTomatoes = (row) => !!row && row.edition.lang === 'en';
 // Adds ratings: a badge on the poster, a line at the top of the description, and Stremio's
 // imdbRating field. With withRt, Rotten Tomatoes too (titles without a known score are queued for
 // lookup). meta._services (rows that mix services) adds a service tag to the poster.
-function withRatings({ _services, ...meta }, withRt) {
-  if (!/^tt\d+$/.test(meta.id)) return meta;
-  const imdb = imdbRatings.get(meta.id);
-  const rt = withRt ? mdblist.rt(meta.type, meta.id) : null;
+function withRatings({ _services, _newDays, _banner, ...meta }, withRt) {
+  const isImdb = /^tt\d+$/.test(meta.id);
+  const imdb = isImdb ? imdbRatings.get(meta.id) : null;
+  const rt = isImdb && withRt ? mdblist.rt(meta.type, meta.id) : null;
   const rtScore = typeof rt === 'number' ? rt : null;
   const services = _services || [];
-  if (imdb == null && rtScore == null && !services.length) return meta;
   const line = [imdb != null && `IMDb ${imdb.toFixed(1)}`, rtScore != null && `Rotten Tomatoes ${rtScore}%`].filter(Boolean).join(' · ');
-  return {
+  const out = {
     ...meta,
     imdbRating: imdb != null ? imdb.toFixed(1) : undefined,
     description: !line ? meta.description : meta.description ? `${line}\n\n${meta.description}` : line,
-    poster: poster.posterUrl(BASE_URL, meta.id, meta.poster, imdb, rtScore, services),
   };
+  // New This Week rows: wide banner instead of a poster.
+  const wide = _banner && banner.bannerUrl(BASE_URL, meta.type, _banner.tmdbId, imdb, services, _banner.days);
+  if (wide) {
+    out.poster = wide;
+    out.posterShape = 'landscape';
+  } else if (isImdb) {
+    out.poster = poster.posterUrl(BASE_URL, meta.id, meta.poster, imdb, rtScore, services, _newDays ?? null);
+  }
+  return out;
 }
 
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
@@ -419,6 +455,7 @@ function weekList(row, apiKey) {
           const keys = e.services.filter((k) => x.services.has(k));
           m.description = `New on ${keys.map((k) => SERVICES[k].name).join(', ')} · ${shortDate(x.added)}${m.description ? '\n\n' + m.description : ''}`;
           m._services = keys;
+          m._banner = { tmdbId: String(tmdbId), days: daysSince(x.added) }; // wide "hero" card
           m._added = x.added;
           m._pop = d.popularity || 0;
           return m;
@@ -461,6 +498,15 @@ async function warmUp() {
 
 module.exports = builder.getInterface();
 module.exports.EDITIONS = TICK_BOXES;
+// One line for the install page, e.g. "7 services · New This Week · Prime Video, aha, …"
+module.exports.describe = (e) => {
+  const names = e.services.map((k) => SERVICES[k].name).join(', ');
+  if (e.audio) return `${e.originalLangs.map((l) => ({ ml: 'Malayalam', hi: 'Hindi', te: 'Telugu', kn: 'Kannada' }[l] || l)).join(' & ')} films with Tamil audio on ${names}`;
+  const bits = [e.types.length === 1 ? 'Movies' : 'Movies & series'];
+  if (e.newThisWeek) bits.push('New This Week');
+  if (e.defaultSort === 'Popular') bits.push('popular first');
+  return `${bits.join(' · ')} — ${names}`;
+};
 module.exports.weekStats = (id) => ({ row: weekStats.get(id) || 'not built yet', file: justwatch.status() });
 module.exports.dubStats = (id) => ({ row: dubStats.get(id) || 'not built yet', file: dubs.status() });
 module.exports.warmUp = warmUp;
