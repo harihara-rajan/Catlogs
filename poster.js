@@ -17,13 +17,13 @@ sharp.cache(false);
 
 const font = opentype.loadSync(path.join(__dirname, 'assets', 'Inter-Bold.otf'));
 const TMDB_IMG = process.env.TMDB_IMG_BASE || 'https://image.tmdb.org/t/p';
-const DESIGN = 3; // bump when the badge drawing changes (2: service tag right; 3: NEW ribbon)
-const SIZE = 'w342';
+const DESIGN = 4; // bump when the badge drawing changes (2: service tag right; 3: NEW ribbon; 4: sharper for TVs)
+const SIZE = 'w500'; // big enough to stay sharp on a TV
 const rendering = limiter(2);
 
 // Rendered posters, newest last; oldest dropped beyond MAX.
 const made = new Map();
-const MAX = 1500;
+const MAX = 900;
 
 const textWidth = (s, size) => font.getAdvanceWidth(s, size);
 const textPath = (s, x, y, size, fill) => `<path fill="${fill}" d="${font.getPath(s, x, y, size).toPathData(1)}"/>`;
@@ -142,7 +142,8 @@ async function render(file, imdb, rt, services, newDays) {
   const { width, height } = await img.metadata();
   return img
     .composite([{ input: overlay(width, height, imdb, rt, services, newDays), top: 0, left: 0 }])
-    .jpeg({ quality: 82, progressive: true })
+ // Full colour resolution (4:4:4) keeps coloured text and badge edges crisp.
+    .jpeg({ quality: 90, chromaSubsampling: '4:4:4', progressive: true })
     .toBuffer();
 }
 

@@ -1,4 +1,4 @@
-// Wide "hero" banners for the New This Week rows: the film's TMDB backdrop (16:9) with its title,
+// Wide "hero" banners for the New This Week rows (1280×720): the film's TMDB backdrop (16:9) with its title,
 // IMDb rating, year and genre, a "NEW · 2d" chip and the service tag. Films without a backdrop
 // get a blurred, darkened version of their poster behind the poster itself.
 //
@@ -10,11 +10,14 @@ const sharp = require('sharp');
 const tmdb = require('./tmdb');
 const { TAGS, textPath, textWidth, newLabel, rendering, TMDB_IMG } = require('./poster');
 
-const DESIGN = 1;
+const DESIGN = 2; // 2: drawn at 1280×720 for TVs
+// Layout is designed at 780×439 and drawn at 1280×720 (viewBox scaling), so it's sharp on TVs.
 const W = 780;
 const H = 439;
+const OUT_W = 1280;
+const OUT_H = 720;
 const made = new Map();
-const MAX = 400;
+const MAX = 250;
 const ENV_KEY = process.env.TMDB_API_KEY || '';
 
 // Split a title into at most two lines that fit `max` px at `size`; shrink the size if needed.
@@ -84,7 +87,7 @@ function overlay({ title, year, genre, imdb, services, days }) {
     parts.push(chip(W - pad + 6, pad - 8, label, 20, t.bg, t.fg, true));
   }
 
-  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${OUT_W}" height="${OUT_H}" viewBox="0 0 ${W} ${H}">
     <defs>
       <linearGradient id="l" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0" stop-color="#000" stop-opacity="0.82"/>
@@ -116,15 +119,15 @@ async function fetchImage(url) {
 
 // The picture behind the text: backdrop, or (no backdrop) the poster on a blurred copy of itself.
 async function base(d) {
-  if (d.backdrop_path) return sharp(await fetchImage(`${TMDB_IMG}/w780${d.backdrop_path}`)).resize(W, H, { fit: 'cover' }).toBuffer();
+  if (d.backdrop_path) return sharp(await fetchImage(`${TMDB_IMG}/w1280${d.backdrop_path}`)).resize(OUT_W, OUT_H, { fit: 'cover' }).toBuffer();
   if (d.poster_path) {
-    const p = await fetchImage(`${TMDB_IMG}/w342${d.poster_path}`);
-    const blurred = await sharp(p).resize(W, H, { fit: 'cover' }).blur(24).modulate({ brightness: 0.55 }).toBuffer();
-    const front = await sharp(p).resize({ height: H - 40 }).toBuffer();
+    const p = await fetchImage(`${TMDB_IMG}/w500${d.poster_path}`);
+    const blurred = await sharp(p).resize(OUT_W, OUT_H, { fit: 'cover' }).blur(36).modulate({ brightness: 0.55 }).toBuffer();
+    const front = await sharp(p).resize({ height: OUT_H - 66 }).toBuffer();
     const { width } = await sharp(front).metadata();
-    return sharp(blurred).composite([{ input: front, left: W - width - 40, top: 20 }]).toBuffer();
+    return sharp(blurred).composite([{ input: front, left: OUT_W - width - 66, top: 33 }]).toBuffer();
   }
-  return sharp({ create: { width: W, height: H, channels: 3, background: '#2A2338' } }).png().toBuffer();
+  return sharp({ create: { width: OUT_W, height: OUT_H, channels: 3, background: '#2A2338' } }).png().toBuffer();
 }
 
 async function render(type, tmdbId, imdb, services, days) {
@@ -140,7 +143,7 @@ async function render(type, tmdbId, imdb, services, days) {
   };
   return sharp(await base(d))
     .composite([{ input: overlay(info), top: 0, left: 0 }])
-    .jpeg({ quality: 82, progressive: true })
+    .jpeg({ quality: 88, chromaSubsampling: '4:4:4', progressive: true })
     .toBuffer();
 }
 
