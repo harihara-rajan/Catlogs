@@ -103,7 +103,7 @@ function catalogEntry(r, options) {
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.5.0',
+  version: '1.5.1',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
@@ -192,35 +192,44 @@ const clean = ({ _tmdb, _date, ...meta }) => meta;
 
 // Titles in this row's language that JustWatch says arrived on this service in the last week.
 // These usually reach TMDB a day or so later; until then they're merged in here.
+const arrivalStats = new Map(); // row id -> what the last arrivals check found (for /debug)
+
 function recentArrivals(row, apiKey) {
   return cached(`arrivals:${row.id}`, HOUR, async () => {
     const items = await justwatch.recent(row.edition.region, row.service.jw, row.type);
+    let failed = 0;
     const metas = await Promise.all(
       items.map(async (x) => {
         try {
           const d = await tmdb.details(row.type, x.tmdbId, apiKey);
           if (d.original_language !== row.edition.lang || !dateOf(d) || dateOf(d) > today()) return null;
           return await toMeta(d, row.type, apiKey, x.imdbId);
-        } catch {
+        } catch (e) {
+          if (!/ 404 /.test(e.message)) failed++; // 404 = TMDB doesn't know it; anything else is temporary
           return null;
         }
       })
     );
-    return metas.filter(Boolean);
+    const found = metas.filter(Boolean);
+    arrivalStats.set(row.id, { at: new Date().toISOString(), checked: items.length, failed, found: found.map((m) => `${m.name} (${m.releaseInfo})`) });
+    // If lookups failed (e.g. TMDB busy), don't keep an incomplete list: the next request tries again.
+    if (failed) throw new Error(`${failed} of ${items.length} TMDB lookups failed for ${row.id}`);
+    return found;
   });
 }
 
 const keyFrom = (config) => (config && config.tmdbApiKey ? String(config.tmdbApiKey).trim() : ENV_KEY);
 
+// -> { metas, partial }; partial = new arrivals should have been merged in but weren't ready yet.
 async function getCatalog(type, id, extra, apiKey) {
   const row = ROW_BY_ID.get(id);
-  if (!row || row.type !== type || !apiKey) return [];
+  if (!row || row.type !== type || !apiKey) return { metas: [], partial: false };
   const choice = (extra && extra.genre) || row.edition.defaultSort || 'Newest';
   const range = rangeOf(choice);
 
   const skip = Number((extra && extra.skip) || 0);
   const page = Math.floor(skip / PAGE_SIZE) + 1;
-  if (page > 500) return []; // TMDB max
+  if (page > 500) return { metas: [], partial: false }; // TMDB max
 
   const mergeArrivals = page === 1 && (choice === 'Newest' || range);
   const [data, arrivals] = await Promise.all([
@@ -240,23 +249,24 @@ async function getCatalog(type, id, extra, apiKey) {
     ),
     // Don't hold the row up for JustWatch: if it's slow, show TMDB's list now; the arrivals are
     // saved in the background and included next time.
-    mergeArrivals ? within(6000, recentArrivals(row, apiKey), []) : [],
+    mergeArrivals ? within(6000, recentArrivals(row, apiKey), null) : [],
   ]);
 
   const listed = page > (data.total_pages || 0) ? [] : await Promise.all((data.results || []).map((it) => toMeta(it, type, apiKey)));
-  if (!arrivals.length) return listed.map(clean);
+  const partial = arrivals === null;
+  if (!arrivals || !arrivals.length) return { metas: listed.map(clean), partial };
 
   const have = new Set(listed.map((x) => x._tmdb));
   let extra_ = arrivals.filter((a) => !have.has(a._tmdb));
   if (range) {
     extra_ = extra_.filter((a) => a._date >= range[0] && a._date <= range[1]);
-    return [...extra_, ...listed].map(clean);
+    return { metas: [...extra_, ...listed].map(clean), partial };
   }
   // Newest: slot arrivals into release-date order, but only those that belong on this first page.
   const full = listed.length >= PAGE_SIZE;
   const oldest = full ? listed[listed.length - 1]._date : '';
   extra_ = extra_.filter((a) => a._date >= oldest);
-  return [...listed, ...extra_].sort((a, b) => (a._date < b._date ? 1 : a._date > b._date ? -1 : 0)).map(clean);
+  return { metas: [...listed, ...extra_].sort((a, b) => (a._date < b._date ? 1 : a._date > b._date ? -1 : 0)).map(clean), partial };
 }
 
 // Public address of this server, for badged poster links (Render sets RENDER_EXTERNAL_URL).
@@ -281,8 +291,11 @@ function withRatings(meta) {
 
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
   try {
-    const metas = (await getCatalog(type, id, extra, keyFrom(config))).map(withRatings);
-    return { metas, cacheMaxAge: 1800, staleRevalidate: 2 * 3600, staleError: 7 * 24 * 3600 };
+    const { metas, partial } = await getCatalog(type, id, extra, keyFrom(config));
+    // If new arrivals weren't ready, ask Stremio to check back in 2 minutes instead of keeping
+    // this incomplete row for half an hour.
+    if (partial) return { metas: metas.map(withRatings), cacheMaxAge: 120 };
+    return { metas: metas.map(withRatings), cacheMaxAge: 1800, staleRevalidate: 2 * 3600, staleError: 7 * 24 * 3600 };
   } catch (e) {
     console.error(`catalog ${id} failed:`, e.message);
     return { metas: [] };
@@ -321,12 +334,16 @@ builder.defineMetaHandler(async ({ type, id, config }) => {
 });
 
 // Loads the first page of every row (default view) plus recent arrivals, so rows open instantly.
+// Loads the first page of every row (default view) so rows open instantly. New arrivals are
+// prepared first, and only for rows whose default view uses them (Newest), Indian rows first.
 async function warmUp() {
   if (!ENV_KEY) return;
   const started = Date.now();
-  await Promise.allSettled(ROWS.map((r) => recentArrivals(r, ENV_KEY)));
+  for (const r of ROWS.filter((r) => (r.edition.defaultSort || 'Newest') === 'Newest')) {
+    await recentArrivals(r, ENV_KEY).catch((e) => console.error('arrivals:', e.message));
+  }
   const results = await Promise.allSettled(
-    ROWS.map((r) => getCatalog(r.type, r.id, {}, ENV_KEY).then((metas) => metas.map(withRatings))) // also queues rating lookups
+    ROWS.map((r) => getCatalog(r.type, r.id, {}, ENV_KEY).then(({ metas }) => metas.map(withRatings))) // also queues rating lookups
   );
   const ok = results.filter((r) => r.status === 'fulfilled').length;
   console.log(`warm-up: ${ok}/${results.length} rows loaded in ${((Date.now() - started) / 1000).toFixed(1)}s`);
@@ -335,6 +352,7 @@ async function warmUp() {
 module.exports = builder.getInterface();
 module.exports.EDITIONS = EDITIONS;
 module.exports.warmUp = warmUp;
+module.exports.arrivalStats = (id) => arrivalStats.get(id) || null;
 module.exports.manifestFor = manifestFor;
 module.exports.languagesFrom = languagesFrom;
 module.exports.hasServerKey = !!ENV_KEY;
