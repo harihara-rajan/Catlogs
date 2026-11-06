@@ -17,7 +17,7 @@ sharp.cache(false);
 
 const font = opentype.loadSync(path.join(__dirname, 'assets', 'Inter-Bold.otf'));
 const TMDB_IMG = process.env.TMDB_IMG_BASE || 'https://image.tmdb.org/t/p';
-const DESIGN = 4; // bump when the badge drawing changes (2: service tag right; 3: NEW ribbon; 4: sharper for TVs)
+const DESIGN = 5; // bump when the badge drawing changes (2: tag right; 3: NEW ribbon; 4: sharper; 5: bigger for TVs)
 const SIZE = 'w500'; // big enough to stay sharp on a TV
 const rendering = limiter(2);
 
@@ -92,7 +92,7 @@ function newRibbon(k, w, days, left) {
 
 // SVG overlay (same size as the poster): ratings strip at the bottom, service tag at the top.
 function overlay(w, h, imdb, rt, services = [], newDays = null) {
-  const k = w / 342; // designed at 342 px wide
+  const k = (w / 342) * 1.3; // designed at 342 px wide; 1.3× so badges read on a TV
   const pad = 9 * k;
   const stripH = 48 * k;
   const y0 = h - stripH - pad;

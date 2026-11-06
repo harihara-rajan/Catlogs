@@ -10,7 +10,7 @@ const sharp = require('sharp');
 const tmdb = require('./tmdb');
 const { TAGS, textPath, textWidth, newLabel, rendering, TMDB_IMG } = require('./poster');
 
-const DESIGN = 2; // 2: drawn at 1280×720 for TVs
+const DESIGN = 3; // 2: drawn at 1280×720 for TVs; 3: bigger labels for TVs
 // Layout is designed at 780×439 and drawn at 1280×720 (viewBox scaling), so it's sharp on TVs.
 const W = 780;
 const H = 439;
@@ -50,11 +50,12 @@ function chip(x, y, label, size, bg, fg, alignRight) {
     ${textPath(label, left + size * 0.6, y + h / 2 + size * 0.36, size, fg)}`;
 }
 
+// Sizes are chosen to stay readable on a TV, where a card is only ~450 px wide.
 function overlay({ title, year, genre, imdb, services, days }) {
-  const pad = 26;
-  const { lines, size } = fitTitle(title, 470);
-  const metaY = H - pad - 6;
-  const titleBottom = metaY - 46;
+  const pad = 28;
+  const { lines, size } = fitTitle(title, 500);
+  const metaY = H - pad - 4;
+  const titleBottom = metaY - 62;
   const parts = [];
 
   // Title lines (bottom-aligned above the meta line), with a soft shadow.
@@ -66,25 +67,26 @@ function overlay({ title, year, genre, imdb, services, days }) {
   // IMDb chip + rating · year · genre
   let x = pad;
   if (imdb != null) {
-    const s = 17;
-    const w = textWidth('IMDb', s) + 14;
-    parts.push(`<rect x="${x}" y="${metaY - 21}" width="${w}" height="28" rx="5" fill="#F5C518"/>`);
-    parts.push(textPath('IMDb', x + 7, metaY - 7 + s * 0.36, s, '#000'));
-    x += w + 9;
+    const s = 26;
+    const w = textWidth('IMDb', s) + 20;
+    const h = 42;
+    parts.push(`<rect x="${x}" y="${metaY - 32}" width="${w}" height="${h}" rx="7" fill="#F5C518"/>`);
+    parts.push(textPath('IMDb', x + 10, metaY - 32 + h / 2 + s * 0.36, s, '#000'));
+    x += w + 12;
     const t = imdb.toFixed(1);
-    parts.push(textPath(t, x, metaY, 26, '#fff'));
-    x += textWidth(t, 26) + 12;
+    parts.push(`<g filter="url(#shadow)">${textPath(t, x, metaY, 40, '#fff')}</g>`);
+    x += textWidth(t, 40) + 16;
   }
   const extra = [year, genre].filter(Boolean).join(' · ');
-  if (extra) parts.push(textPath(imdb != null ? `· ${extra}` : extra, x, metaY, 22, '#D6D2E4'));
+  if (extra) parts.push(`<g filter="url(#shadow)">${textPath(imdb != null ? `· ${extra}` : extra, x, metaY, 32, '#E4E0F0')}</g>`);
 
   // NEW chip (top-left) and service tag (top-right)
-  if (days != null) parts.push(chip(pad - 6, pad - 8, newLabel(days), 20, '#fff', '#15121c'));
+  if (days != null) parts.push(chip(pad - 8, pad - 10, newLabel(days), 32, '#fff', '#15121c'));
   const known = services.filter((s) => TAGS[s]);
   if (known.length) {
     const t = TAGS[known[0]];
     const label = known.length > 1 ? `${t.label} +${known.length - 1}` : t.label;
-    parts.push(chip(W - pad + 6, pad - 8, label, 20, t.bg, t.fg, true));
+    parts.push(chip(W - pad + 8, pad - 10, label, 32, t.bg, t.fg, true));
   }
 
   return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${OUT_W}" height="${OUT_H}" viewBox="0 0 ${W} ${H}">

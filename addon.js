@@ -87,7 +87,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.2.1',
+  version: '2.2.2',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -361,7 +361,8 @@ builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
     // If new arrivals weren't ready, ask Stremio to check back in 2 minutes instead of keeping
     // this incomplete row for half an hour.
     if (partial) return { metas: rated, cacheMaxAge: 120 };
-    return { metas: rated, cacheMaxAge: 1800, staleRevalidate: 2 * 3600, staleError: 7 * 24 * 3600 };
+    // Short caching so changes (new arrivals, new poster designs) reach the apps within ~30 minutes.
+    return { metas: rated, cacheMaxAge: 900, staleRevalidate: 900, staleError: 7 * 24 * 3600 };
   } catch (e) {
     console.error(`catalog ${id} failed:`, e.message);
     return { metas: [] };
