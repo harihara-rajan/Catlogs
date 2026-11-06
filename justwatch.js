@@ -12,7 +12,7 @@ const DAYS_BACK = 7;
 const limited = limiter(4);
 
 // Our service key -> JustWatch package short name (India).
-const PACKAGES = { prime: 'prv', aha: 'aha', netflix: 'nfx', sonyliv: 'snl', sunnxt: 'snx', jiohotstar: 'jhs', zee5: 'zee' };
+const PACKAGES = { prime: 'prv', aha: 'aha', netflix: 'nfx', sonyliv: 'snl', sunnxt: 'snx', jiohotstar: 'jhs', zee5: 'zee', manoramamax: 'mrx' };
 
 const QUERY = `query($c: Country!, $l: Language!, $d: Date!, $p: [String!], $after: String) {
   newTitles(country: $c, date: $d, first: 100, after: $after, filter: { packages: $p }, pageType: NEW, priceDrops: false) {

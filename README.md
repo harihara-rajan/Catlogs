@@ -1,11 +1,22 @@
-# Tamil OTT Catalogs — Stremio addon
+# OTT Catalogs — Stremio addon (Tamil · Malayalam · Hindi)
 
-Adds 14 rows to Stremio: Tamil **movies** and **series** currently available in **India** on
+Adds rows to Stremio for **movies** and **series** currently available in **India**, per
+language and service. You pick the languages on the install page (`/configure`):
 
-Prime Video · aha · Netflix · SonyLIV · Sun NXT · JioHotstar · ZEE5
+| Language  | Services |
+|-----------|----------|
+| Tamil     | Prime Video · aha · Netflix · SonyLIV · Sun NXT · JioHotstar · ZEE5 |
+| Malayalam | Prime Video · Netflix · SonyLIV · Sun NXT · JioHotstar · ZEE5 · ManoramaMAX |
+| Hindi     | Prime Video · Netflix · SonyLIV · JioHotstar · ZEE5 |
 
 Rows show the **newest releases first**. The dropdown on each row switches to **Popular**,
-**Top rated**, or a single **year** (1980 onwards). Rows scroll endlessly.
+**Top rated**, or a year range. Stremio rejects addon manifests over 8 KB, so the dropdown adapts:
+with one language it lists every year back to 1980; with more languages (more rows) it lists
+recent years plus decades and "Older" (before 2000). Rows scroll endlessly.
+
+The plain `/manifest.json` link installs Tamil only (what earlier versions had). Other choices
+put the settings in the link, e.g. `/{"languages":"ta,ml"}/manifest.json` — the install page
+builds it for you. Stremio's **Configure** button on the installed addon reopens that page.
 
 This is a **catalog-only** addon: it lists titles and gives Stremio their IMDb IDs, so posters,
 details and episode lists come from Stremio's built-in metadata, and whatever stream addons you
@@ -74,18 +85,21 @@ itself, open the service on Render and tap **Manual Deploy → Deploy latest com
 
 ## Changing things
 
-- **Services**: edit the `SERVICES` list at the top of `addon.js`. Service names are matched
-  against TMDB's India provider list automatically (so "Netflix basic with Ads" counts as
-  Netflix); the numeric `fallback` IDs are only used if that list can't be loaded.
-- **Language**: change `with_original_language: 'ta'` in `addon.js` (`te` Telugu, `ml` Malayalam,
-  `kn` Kannada, `hi` Hindi).
+- **Services**: edit the `SERVICES` list at the top of `addon.js` (`langs` says which languages
+  get a row for that service). Service names are matched against TMDB's India provider list
+  automatically (so "Netflix basic with Ads" counts as Netflix); the numeric `fallback` IDs are
+  only used if that list can't be loaded. Add the service's JustWatch short name to `PACKAGES`
+  in `justwatch.js` too.
+- **Languages**: add to `LANGUAGES` in `addon.js` (TMDB codes: `te` Telugu, `kn` Kannada, …) and
+  to the services' `langs`. Watch the 8 KB manifest limit if every language is ticked.
 - **Country**: change `watch_region: 'IN'` in `addon.js` and `tmdb.js` (`DK` gives you what's on the
   Danish versions of these services).
 
 ## Files
 
-- `addon.js` — manifest, the 14 catalogs, and the catalog/meta handlers
+- `addon.js` — languages, services, per-install manifests, and the catalog/meta handlers
 - `tmdb.js` — TMDB requests with in-memory caching and a limit on parallel requests
-- `server.js` — starts the HTTP server (port `PORT`, default 7000), warm-up and keep-awake
+- `server.js` — HTTP server (port `PORT`, default 7000): manifests, install page, warm-up, keep-awake
+- `configure.js` — the install page
 - `justwatch.js` — recent arrivals from JustWatch
 - `cache.js` — in-memory cache and request limiter
