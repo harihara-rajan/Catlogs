@@ -63,3 +63,4 @@ jobs:
           git add .
           git commit -q -m "Data $(date -u +%Y-%m-%dT%H:%MZ)"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" data
+# schedule
