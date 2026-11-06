@@ -17,7 +17,7 @@ const H = 439;
 const OUT_W = 1280;
 const OUT_H = 720;
 const made = new Map();
-const MAX = 250;
+const MAX = 150; // ~170 KB each
 const ENV_KEY = process.env.TMDB_API_KEY || '';
 
 // Split a title into at most two lines that fit `max` px at `size`; shrink the size if needed.
@@ -143,7 +143,7 @@ async function render(type, tmdbId, imdb, services, days) {
   };
   return sharp(await base(d))
     .composite([{ input: overlay(info), top: 0, left: 0 }])
-    .jpeg({ quality: 88, chromaSubsampling: '4:4:4', progressive: true })
+    .jpeg({ quality: 84, chromaSubsampling: '4:4:4', progressive: true })
     .toBuffer();
 }
 
