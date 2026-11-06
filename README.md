@@ -9,9 +9,14 @@ Rows show the **newest releases first**. The dropdown on each row switches to **
 
 This is a **catalog-only** addon: it lists titles and gives Stremio their IMDb IDs, so posters,
 details and episode lists come from Stremio's built-in metadata, and whatever stream addons you
-already have installed handle playback. It doesn't touch the services themselves; the
-"what's on where" data comes from TMDB (which gets it from JustWatch), so new arrivals can take a
-day or two to show up.
+already have installed handle playback. It doesn't touch the services themselves.
+
+**Where the "what's on where" data comes from:** the full list comes from TMDB, which copies it
+from JustWatch roughly daily. To catch new arrivals sooner, the addon also reads JustWatch's own
+"new on <service>" lists for the last 7 days and slots any Tamil title TMDB hasn't picked up yet
+into its release-date position. So a film appears once **JustWatch** lists it on the service —
+usually within hours to a day of it going live. (JustWatch's API is unofficial; if it ever
+fails, the addon carries on with TMDB alone.)
 
 ---
 
@@ -64,24 +69,8 @@ Render the addon visits itself every 10 minutes so it stays awake (set `KEEP_AWA
 that), loads every row when it starts and again every 2 hours, and answers from its saved copy
 while refreshing in the background — so rows should open straight away.
 
-## New arrivals before TMDB catches up (`pins.json`)
-
-TMDB/JustWatch usually take 1–3 days to notice a new film on a service. To show it now, add it
-to `pins.json` under its service and commit (you can edit the file on github.com from your phone;
-Render redeploys by itself in about a minute):
-
-```json
-"sonyliv": [
-  { "title": "Meesaya Murukku 2", "year": 2026, "type": "movie", "added": "2026-11-06" }
-]
-```
-
-- Give a `title` + `year`, or an IMDb id instead: `{ "imdb": "tt1234567", "type": "movie", "added": "…" }`
-  (the IMDb id is in the address of the film's IMDb page). Use the IMDb id if a title search picks
-  the wrong film.
-- `type` is `movie` or `series`.
-- Pins sit at the top of the row's Newest and Popular views and vanish by themselves 14 days after
-  `added`, by which time TMDB has normally caught up. Leave out `added` to keep one pinned for good.
+**Updates:** after a change is pushed to GitHub, Render needs to redeploy. If it doesn't do so by
+itself, open the service on Render and tap **Manual Deploy → Deploy latest commit**.
 
 ## Changing things
 
@@ -98,4 +87,5 @@ Render redeploys by itself in about a minute):
 - `addon.js` — manifest, the 14 catalogs, and the catalog/meta handlers
 - `tmdb.js` — TMDB requests with in-memory caching and a limit on parallel requests
 - `server.js` — starts the HTTP server (port `PORT`, default 7000), warm-up and keep-awake
-- `pins.json` — hand-added new arrivals
+- `justwatch.js` — recent arrivals from JustWatch
+- `cache.js` — in-memory cache and request limiter
