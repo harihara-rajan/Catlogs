@@ -3,11 +3,12 @@ const tmdb = require('./tmdb');
 const justwatch = require('./justwatch');
 const { cached, within } = require('./cache');
 
-// Languages (TMDB original-language codes), in the order their rows appear.
+// Languages (TMDB original-language codes), in the order their rows appear, and which kinds of
+// rows each gets.
 const LANGUAGES = [
-  { code: 'ta', name: 'Tamil' },
-  { code: 'ml', name: 'Malayalam' },
-  { code: 'hi', name: 'Hindi' },
+  { code: 'ta', name: 'Tamil', types: ['movie', 'series'] },
+  { code: 'ml', name: 'Malayalam', types: ['movie'] },
+  { code: 'hi', name: 'Hindi', types: ['movie', 'series'] },
 ];
 
 // The services. `match` = TMDB provider names (India) that count as this service, compared after
@@ -19,7 +20,7 @@ const SERVICES = [
   { key: 'aha',         name: 'aha',         match: ['aha'],                            fallback: [532],  langs: ['ta'] },
   { key: 'netflix',     name: 'Netflix',     match: ['netflix'],                        fallback: [8],    langs: ['ta', 'ml', 'hi'] },
   { key: 'sonyliv',     name: 'SonyLIV',     match: ['sonyliv'],                        fallback: [237],  langs: ['ta', 'ml', 'hi'] },
-  { key: 'sunnxt',      name: 'Sun NXT',     match: ['sunnxt'],                         fallback: [309],  langs: ['ta', 'ml'] },
+  { key: 'sunnxt',      name: 'Sun NXT',     match: ['sunnxt'],                         fallback: [309],  langs: ['ta'] },
   { key: 'jiohotstar',  name: 'JioHotstar',  match: ['jiohotstar', 'hotstar', 'disneyplushotstar', 'jiocinema'], fallback: [2336], langs: ['ta', 'ml', 'hi'] },
   { key: 'zee5',        name: 'ZEE5',        match: ['zee5'],                           fallback: [232],  langs: ['ta', 'ml', 'hi'] },
   { key: 'manoramamax', name: 'ManoramaMAX', match: ['manoramamax'],                    fallback: [482],  langs: ['ml'] },
@@ -59,7 +60,7 @@ const ENV_KEY = process.env.TMDB_API_KEY || '';
 
 const ALL_CATALOGS = LANGUAGES.flatMap((l) =>
   SERVICES.filter((s) => s.langs.includes(l.code)).flatMap((s) =>
-    ['movie', 'series'].map((type) => ({
+    l.types.map((type) => ({
       type,
       id: `${l.code}-${s.key}-${type}`,
       name: `${s.name} ${l.name}`,
@@ -71,7 +72,7 @@ const ALL_CATALOGS = LANGUAGES.flatMap((l) =>
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.3.0',
+  version: '1.3.1',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on Indian streaming services, newest first. Data: TMDB and JustWatch.',
   logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
@@ -201,8 +202,7 @@ async function getCatalog(type, id, extra, apiKey) {
   const m = /^([a-z]{2})-([a-z0-9]+)-(movie|series)$/.exec(id);
   if (!m || !apiKey) return [];
   const [, lang, serviceKey] = m;
-  const service = SERVICES.find((s) => s.key === serviceKey);
-  if (!service || !service.langs.includes(lang)) return [];
+  if (!ALL_CATALOGS.some((c) => c.id === id && c.type === type)) return [];
   const choice = (extra && extra.genre) || 'Newest';
   const range = rangeOf(choice);
 

@@ -6,7 +6,7 @@ language and service. You pick the languages on the install page (`/configure`):
 | Language  | Services |
 |-----------|----------|
 | Tamil     | Prime Video · aha · Netflix · SonyLIV · Sun NXT · JioHotstar · ZEE5 |
-| Malayalam | Prime Video · Netflix · SonyLIV · Sun NXT · JioHotstar · ZEE5 · ManoramaMAX |
+| Malayalam | Prime Video · Netflix · SonyLIV · JioHotstar · ZEE5 · ManoramaMAX (movies only) |
 | Hindi     | Prime Video · Netflix · SonyLIV · JioHotstar · ZEE5 |
 
 Rows show the **newest releases first**. The dropdown on each row switches to **Popular**,
