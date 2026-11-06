@@ -1,18 +1,11 @@
 const A = 'https://tamil-ott-catalogs.onrender.com';
 const j = async (u) => (await fetch(A + u)).json();
 (async () => {
-  for (let i = 0; i < 16; i++) {
-    let v = '?'; try { v = (await j('/manifest.json')).version; } catch { v = 'unreachable'; }
-    console.log(new Date().toISOString().slice(11, 19), 'version', v);
-    if (v === '1.9.0') break;
-    await new Promise((r) => setTimeout(r, 15000));
-  }
-  await new Promise((r) => setTimeout(r, 45000));
-  for (const [t, id] of [['movie', 'ta-new-movie'], ['movie', 'ta-dub-movie']]) {
-    const c = await j(`/catalog/${t}/${id}.json`);
-    console.log(`\n${id}: ${c.metas.length}`);
-    for (const x of c.metas.slice(0, 5)) console.log('   ', x.name, '|', (x.poster || '').replace(A, ''));
-    const p = c.metas.find((x) => (x.poster || '').includes('/poster/'));
-    if (p) { const r = await fetch(p.poster); console.log('   poster:', r.status, r.headers.get('content-type')); }
+  for (let i = 0; i < 8; i++) {
+    const d = await j('/debug/dubs/ta-dub-movie');
+    const c = await j('/catalog/movie/ta-dub-movie.json');
+    console.log(new Date().toISOString().slice(11, 19), 'row items:', c.metas.length, '|', JSON.stringify(d.row), '| file:', JSON.stringify(d.file.file && d.file.file.lists).slice(0, 300), '| err:', JSON.stringify(d.file.lastError));
+    if (c.metas.length) { for (const x of c.metas.slice(0, 8)) console.log('   ', x.releaseInfo, x.name, '|', (x.description || '').split('\n').filter(Boolean).slice(0, 2).join(' / ').slice(0, 90), '|', (x.poster || '').replace(A, '').slice(0, 50)); break; }
+    await new Promise((r) => setTimeout(r, 20000));
   }
 })();
