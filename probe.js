@@ -1,10 +1,10 @@
-const JW = 'https://apis.justwatch.com/graphql';
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const A = 'https://tamil-ott-catalogs.onrender.com';
+const t = async (u, ms = 30000) => { const t0 = Date.now(); try { const r = await fetch(A + u, { signal: AbortSignal.timeout(ms) }); const b = await r.text(); return `${r.status} in ${Date.now() - t0}ms: ${b.slice(0, 250).replace(/\s+/g, ' ')}`; } catch (e) { return `FAILED after ${Date.now() - t0}ms: ${e.message}`; } };
 (async () => {
-  for (const [p, min, max] of [['prv', 2024, 2026], ['prv', 2020, 2023], ['prv', 2010, 2019], ['prv', 1900, 2009], ['jhs', 1900, 2009], ['zee', 2015, 2026]]) {
-    const q = `query($p: [String!], $min: Int, $max: Int) { popularTitles(country: IN, filter: { packages: $p, objectTypes: [MOVIE], releaseYear: { min: $min, max: $max } }, first: 1) { totalCount } }`;
-    const r = await (await fetch(JW, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Mozilla/5.0' }, body: JSON.stringify({ query: q, variables: { p: [p], min, max } }) })).json();
-    console.log(p, min, max, r.errors ? 'ERR ' + JSON.stringify(r.errors).slice(0, 200) : r.data.popularTitles.totalCount);
-    await sleep(2500);
+  for (let i = 0; i < 6; i++) {
+    console.log(new Date().toISOString().slice(11, 19), 'manifest', await t('/manifest.json'));
+    console.log('   dubs ', await t('/debug/dubs/ta-dub-movie'));
+    console.log('   row  ', await t('/catalog/movie/ta-netflix-movie.json'));
+    await new Promise((r) => setTimeout(r, 15000));
   }
 })();
