@@ -83,7 +83,7 @@ function catalogEntry(r, options) {
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.9.0',
+  version: '1.9.1',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
@@ -262,13 +262,17 @@ async function getCatalog(type, id, extra, apiKey) {
 // Public address of this server, for badged poster links (Render sets RENDER_EXTERNAL_URL).
 const BASE_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '');
 
-// Adds IMDb and Rotten Tomatoes ratings: a badge on the poster, a line at the top of the
-// description, and Stremio's imdbRating field. Titles without a known score are queued for lookup.
-// meta._services (rows that mix services) adds a service tag to the poster.
-function withRatings({ _services, ...meta }) {
+// Rotten Tomatoes rarely reviews Indian films, so only English rows show it; Indian-language rows
+// show IMDb alone, which keeps them uniform (and saves MDBList lookups).
+const showsRottenTomatoes = (row) => !!row && row.edition.lang === 'en';
+
+// Adds ratings: a badge on the poster, a line at the top of the description, and Stremio's
+// imdbRating field. With withRt, Rotten Tomatoes too (titles without a known score are queued for
+// lookup). meta._services (rows that mix services) adds a service tag to the poster.
+function withRatings({ _services, ...meta }, withRt) {
   if (!/^tt\d+$/.test(meta.id)) return meta;
   const imdb = imdbRatings.get(meta.id);
-  const rt = mdblist.rt(meta.type, meta.id);
+  const rt = withRt ? mdblist.rt(meta.type, meta.id) : null;
   const rtScore = typeof rt === 'number' ? rt : null;
   const services = _services || [];
   if (imdb == null && rtScore == null && !services.length) return meta;
@@ -284,10 +288,12 @@ function withRatings({ _services, ...meta }) {
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
   try {
     const { metas, partial } = await getCatalog(type, id, extra, keyFrom(config));
+    const withRt = showsRottenTomatoes(ROW_BY_ID.get(id));
+    const rated = metas.map((m) => withRatings(m, withRt));
     // If new arrivals weren't ready, ask Stremio to check back in 2 minutes instead of keeping
     // this incomplete row for half an hour.
-    if (partial) return { metas: metas.map(withRatings), cacheMaxAge: 120 };
-    return { metas: metas.map(withRatings), cacheMaxAge: 1800, staleRevalidate: 2 * 3600, staleError: 7 * 24 * 3600 };
+    if (partial) return { metas: rated, cacheMaxAge: 120 };
+    return { metas: rated, cacheMaxAge: 1800, staleRevalidate: 2 * 3600, staleError: 7 * 24 * 3600 };
   } catch (e) {
     console.error(`catalog ${id} failed:`, e.message);
     return { metas: [] };
@@ -447,7 +453,7 @@ async function warmUp() {
     await recentArrivals(r, ENV_KEY).catch((e) => console.error('arrivals:', e.message));
   }
   const results = await Promise.allSettled(
-    ROWS.map((r) => getCatalog(r.type, r.id, {}, ENV_KEY).then(({ metas }) => metas.map(withRatings))) // also queues rating lookups
+    ROWS.map((r) => getCatalog(r.type, r.id, {}, ENV_KEY).then(({ metas }) => metas.map((m) => withRatings(m, showsRottenTomatoes(r))))) // also queues rating lookups
   );
   const ok = results.filter((r) => r.status === 'fulfilled').length;
   console.log(`warm-up: ${ok}/${results.length} rows loaded in ${((Date.now() - started) / 1000).toFixed(1)}s`);

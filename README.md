@@ -51,8 +51,10 @@ TMDB alone.
 
 ## Ratings on posters
 
-Each poster gets a small strip with its **IMDb** rating and **Rotten Tomatoes** critics score
-(🍅 fresh at 60%+, green splat below), and the same line at the top of the description.
+Each poster gets a small strip with its **IMDb** rating, plus the **Rotten Tomatoes** critics score
+(🍅 fresh at 60%+, green splat below) on the English rows only — Rotten Tomatoes rarely reviews
+Indian films, so Indian-language rows show IMDb alone. The same line goes at the top of the
+description.
 
 - **IMDb**: from IMDb's free daily ratings file (`title.ratings.tsv.gz`, personal/non-commercial
   use), downloaded at start-up and daily. No key needed.
