@@ -45,7 +45,8 @@ const HOUR = 3600 * 1000;
 const ENV_KEY = process.env.TMDB_API_KEY || '';
 
 // Every possible row. Tamil keeps its original ids (ta-netflix-movie) so old installs still work.
-// Each language's "New This Week" rows come first, then one row per service.
+// Each language's "New This Week" rows, then one row per service (manifestFor puts all the
+// "New This Week" rows at the very top).
 const ROWS = EDITIONS.flatMap((e) => [
   ...(e.newThisWeek
     ? e.types.map((type) => ({ id: `${e.code}-new-${type}`, type, name: `New This Week · ${e.rowLabel || e.name}`, edition: e, newWeek: true }))
@@ -82,7 +83,7 @@ function catalogEntry(r, options) {
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.8.0',
+  version: '1.8.1',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
@@ -116,7 +117,9 @@ function manifestFor(config) {
   m.description = `${names.join(', ')} movies and series on streaming services, newest first. Data: TMDB and JustWatch.`;
   const hasKey = ENV_KEY || (config && config.tmdbApiKey);
   m.behaviorHints = { configurable: true, configurationRequired: !hasKey };
-  const rows = ROWS.filter((r) => codes.includes(r.edition.code));
+  // All "New This Week" rows go to the very top, then every other row in its usual order.
+  const chosen = ROWS.filter((r) => codes.includes(r.edition.code));
+  const rows = [...chosen.filter((r) => r.newWeek), ...chosen.filter((r) => !r.newWeek)];
   for (const options of DROPDOWN_TIERS) {
     m.catalogs = rows.map((r) => catalogEntry(r, options));
     if (JSON.stringify(m).length <= MAX_MANIFEST) break;
