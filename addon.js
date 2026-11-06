@@ -24,7 +24,8 @@ const SERVICES = {
 };
 
 // The tick boxes on the install page, in the order their rows appear. `lang` = TMDB original
-// language, `region` = country whose streaming catalogues are used.
+// language, `region` = country whose streaming catalogues are used, `defaultSort` = how rows are
+// ordered when nothing is picked in the dropdown (Newest if not set).
 const EDITIONS = [
   { code: 'ta', name: 'Tamil', lang: 'ta', region: 'IN', types: ['movie', 'series'],
     services: ['prime', 'aha', 'netflix', 'sonyliv', 'sunnxt', 'jiohotstar', 'zee5'] },
@@ -32,9 +33,9 @@ const EDITIONS = [
     services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5', 'manoramamax'] },
   { code: 'hi', name: 'Hindi', lang: 'hi', region: 'IN', types: ['movie', 'series'],
     services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5'] },
-  { code: 'en-in', name: 'English (India)', rowLabel: 'English (IN)', lang: 'en', region: 'IN', types: ['movie', 'series'],
+  { code: 'en-in', name: 'English (India)', rowLabel: 'English (IN)', lang: 'en', region: 'IN', types: ['movie', 'series'], defaultSort: 'Popular',
     services: ['netflix', 'prime', 'jiohotstar', 'appletv', 'sonyliv', 'lionsgate'] },
-  { code: 'en-us', name: 'English (US)', rowLabel: 'English (US)', lang: 'en', region: 'US', types: ['movie', 'series'],
+  { code: 'en-us', name: 'English (US)', rowLabel: 'English (US)', lang: 'en', region: 'US', types: ['movie', 'series'], defaultSort: 'Popular',
     services: ['netflix', 'prime', 'disney', 'hbomax', 'hulu', 'appletv', 'paramount', 'peacock'] },
 ];
 
@@ -84,17 +85,22 @@ const ROWS = EDITIONS.flatMap((e) =>
   )
 );
 const ROW_BY_ID = new Map(ROWS.map((r) => [r.id, r]));
-const catalogEntry = (r, options) => ({
-  type: r.type,
-  id: r.id,
-  name: r.name,
-  extra: options ? [{ name: 'genre', options }, { name: 'skip' }] : [{ name: 'skip' }],
-});
+// The row's default sort goes first in its dropdown.
+function catalogEntry(r, options) {
+  const first = r.edition.defaultSort || 'Newest';
+  const opts = options && [first, ...options.filter((o) => o !== first)];
+  return {
+    type: r.type,
+    id: r.id,
+    name: r.name,
+    extra: opts ? [{ name: 'genre', options: opts }, { name: 'skip' }] : [{ name: 'skip' }],
+  };
+}
 
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.4.0',
+  version: '1.4.1',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
@@ -206,7 +212,7 @@ const keyFrom = (config) => (config && config.tmdbApiKey ? String(config.tmdbApi
 async function getCatalog(type, id, extra, apiKey) {
   const row = ROW_BY_ID.get(id);
   if (!row || row.type !== type || !apiKey) return [];
-  const choice = (extra && extra.genre) || 'Newest';
+  const choice = (extra && extra.genre) || row.edition.defaultSort || 'Newest';
   const range = rangeOf(choice);
 
   const skip = Number((extra && extra.skip) || 0);

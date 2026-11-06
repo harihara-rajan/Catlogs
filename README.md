@@ -11,7 +11,7 @@ language and service. You pick the languages on the install page (`/configure`):
 | English (India) | India   | Netflix · Prime Video · JioHotstar · Apple TV · SonyLIV · Lionsgate Play |
 | English (US)    | US      | Netflix · Prime Video · Disney+ · HBO Max · Hulu · Apple TV · Paramount+ · Peacock |
 
-Rows show the **newest releases first**. The dropdown on each row switches to **Popular**,
+Rows show the **newest releases first** (English rows: **most popular first**). The dropdown on each row switches to **Popular**,
 **Top rated**, or a year range. Stremio rejects addon manifests over 8 KB, so the dropdown adapts
 to the number of rows: every year back to 1980 when it fits, then recent years plus decades and
 "Older" (before 2000), then decades only, then just the sort orders; with four or five boxes ticked
