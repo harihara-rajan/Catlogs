@@ -2,17 +2,29 @@
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// languages: [{ code, name, desc, chips: [{ key, name }] }]; selected: [code];
-// chips: { code: [chip keys] | null (= all) } for the selected tick boxes
+// languages: [{ code, name, desc, chips: [{ key, name, types: ['movie','series'] }] }];
+// selected: [code]; chips: { code: [keys like "netflix", "netflix:m"] | null (= all) }
 module.exports = function configurePage({ languages, selected, chips = {}, needsKey, version }) {
+  const T = { movie: { s: 'm', label: 'Movies' }, series: { s: 's', label: 'Series' } };
   const boxes = languages
     .map((l) => {
-      const on = (key) => !chips[l.code] || chips[l.code].includes(key);
-      const chipRow = l.chips && l.chips.length
-        ? `<div class="chips" data-for="${esc(l.code)}" role="group" aria-label="${esc(l.name)} rows">
-            ${l.chips.map((c) => `<button type="button" class="chip${on(c.key) ? ' on' : ''}" data-key="${esc(c.key)}" aria-pressed="${on(c.key)}">${esc(c.name)}</button>`).join('')}
-           </div>`
-        : '';
+      const saved = chips[l.code];
+      const on = (key, type) => !saved || saved.includes(key) || saved.includes(`${key}:${T[type].s}`);
+      const pill = (c, type, label) =>
+        `<button type="button" class="chip${on(c.key, type) ? ' on' : ''}" data-key="${esc(c.key)}" data-type="${T[type].s}" aria-pressed="${on(c.key, type)}">${esc(label)}</button>`;
+      let chipRow = '';
+      if (l.chips && l.chips.length) {
+        const split = l.chips[0].types.length > 1;
+        chipRow = split
+          // Movies and series: one line per service with two switches.
+          ? `<div class="chips grid" data-for="${esc(l.code)}" role="group" aria-label="${esc(l.name)} rows">
+              ${l.chips.map((c) => `<div class="svc"><span class="svc-name">${esc(c.name)}</span><span class="pills">${c.types.map((t) => pill(c, t, T[t].label)).join('')}</span></div>`).join('')}
+             </div>`
+          // Movies only: one switch per service.
+          : `<div class="chips" data-for="${esc(l.code)}" role="group" aria-label="${esc(l.name)} rows">
+              ${l.chips.map((c) => pill(c, c.types[0], c.name)).join('')}
+             </div>`;
+      }
       return `
       <div class="item">
         <label class="opt">
@@ -60,6 +72,11 @@ module.exports = function configurePage({ languages, selected, chips = {}, needs
   .chip.on { background:rgba(109,74,255,.22); border-color:rgba(155,133,255,.7); color:var(--text); }
   .chip.on::before { content:"✓ "; }
   .chip:focus-visible { outline:2px solid var(--pink); outline-offset:2px; }
+  .chips.grid { flex-direction:column; flex-wrap:nowrap; gap:6px; }
+  .svc { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .svc-name { font-size:15px; font-weight:600; color:var(--text); }
+  .pills { display:flex; gap:6px; flex:none; }
+  .pills .chip { font-size:13px; padding:5px 0; width:92px; text-align:center; }
   .hint { font-size:12.5px; color:var(--muted); padding:0 12px 12px 50px; display:none; }
   .item.open .hint { display:block; }
   .opt:hover { background:var(--card2); }
@@ -94,7 +111,7 @@ module.exports = function configurePage({ languages, selected, chips = {}, needs
       <p class="tag">What's on your streaming services, newest first</p>
     </div>
   </header>
-  <p class="intro">Tick a language, then switch off any services you don't want. Each service gives its own row, with IMDb ratings on the posters.</p>
+  <p class="intro">Tick a language, then switch off any services, movies or series you don't want. Each one gives its own row, with IMDb ratings on the posters.</p>
 
   <div class="card" role="group" aria-label="Languages">${boxes}
   </div>
@@ -146,13 +163,17 @@ module.exports = function configurePage({ languages, selected, chips = {}, needs
     if (!langs.length) return null;
     const cfg = {};
     if (!(langs.length === 1 && langs[0] === 'ta')) cfg.languages = langs.join(',');
-    // Only save a service choice when some are switched off (none saved = all rows).
+    // Only save a choice when something is switched off (none saved = all rows). Per service:
+    // "netflix" = movies and series, "netflix:m" = movies only, "netflix:s" = series only.
     for (const code of langs) {
       const group = chipsFor(code);
       if (!group) continue;
       const all = [...group.querySelectorAll('.chip')];
-      const on = all.filter((c) => c.classList.contains('on')).map((c) => c.dataset.key);
-      if (on.length && on.length < all.length) cfg[code] = on.join(',');
+      if (all.every((c) => c.classList.contains('on'))) continue;
+      const byKey = {};
+      all.forEach((c) => { (byKey[c.dataset.key] = byKey[c.dataset.key] || { all: 0, on: [] }).all++; if (c.classList.contains('on')) byKey[c.dataset.key].on.push(c.dataset.type); });
+      const keys = Object.entries(byKey).filter(([, v]) => v.on.length).map(([k, v]) => (v.on.length === v.all ? k : k + ':' + v.on[0]));
+      if (keys.length) cfg[code] = keys.join(',');
     }
     if (key && key.value.trim()) cfg.tmdbApiKey = key.value.trim();
     const prefix = Object.keys(cfg).length ? '/' + encodeURIComponent(JSON.stringify(cfg)) : '';

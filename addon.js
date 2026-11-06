@@ -87,7 +87,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.1.0',
+  version: '2.2.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -114,9 +114,10 @@ function languagesFrom(config) {
 
 // Manifest for one install: only the chosen rows, named after them, with the richest dropdown
 // that still fits.
-// Which rows of each tick box were chosen: config["ta"] = "new,prime,netflix" (chip keys: "new" for
-// New This Week, otherwise service keys). A tick box without a choice gets all its rows, so older
-// install links keep working. -> code -> Set of chip keys (null = all)
+// Which rows of each tick box were chosen: config["ta"] = "new,prime:m,netflix:s" (keys: "new" for
+// New This Week, otherwise service keys; ":m" = movies only, ":s" = series only, no suffix = both).
+// A tick box without a choice gets all its rows, so older install links keep working.
+// -> code -> Set of keys (null = all)
 function chipsFrom(config) {
   const out = {};
   for (const code of languagesFrom(config)) {
@@ -129,14 +130,18 @@ function chipsFrom(config) {
 // Chips a tick box offers on the install page: New This Week (if it has it), then its services.
 function chipsOf(e) {
   if (e.audio) return [];
-  return [...(e.newThisWeek ? [{ key: 'new', name: 'New This Week' }] : []), ...e.services.map((k) => ({ key: k, name: SERVICES[k].name }))];
+  return [
+    ...(e.newThisWeek ? [{ key: 'new', name: 'New This Week', types: e.types }] : []),
+    ...e.services.map((k) => ({ key: k, name: SERVICES[k].name, types: e.types })),
+  ];
 }
 
 function rowChosen(r, chips) {
   const set = chips[r.edition.code];
   if (set === undefined) return false; // tick box not chosen
   if (set === null || r.dub) return true; // all rows
-  return set.has(r.newWeek ? 'new' : r.serviceKey);
+  const key = r.newWeek ? 'new' : r.serviceKey;
+  return set.has(key) || set.has(`${key}:${r.type === 'movie' ? 'm' : 's'}`);
 }
 
 function manifestFor(config) {
