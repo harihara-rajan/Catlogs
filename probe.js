@@ -1,8 +1,6 @@
-const A = 'https://tamil-ott-catalogs.onrender.com';
 (async () => {
-  for (const u of [`${A}/manifest.json`, `${A}/manifest.json?nocache=${Date.now()}`]) {
-    const r = await fetch(u, { cache: 'no-store' });
-    const m = await r.json();
-    console.log(u.replace(A, ''), '->', m.version, '| cache-control:', r.headers.get('cache-control'), '| age:', r.headers.get('age'), '| cf-cache:', r.headers.get('cf-cache-status'));
-  }
+  const q = `query { popularTitles(country: IN, filter: { searchQuery: "Meesaya Murukku 2" }, first: 1) { edges { node { content(country: IN, language: en) { title } offers(country: IN, platform: WEB) { monetizationType dateCreated package { clearName } } } } } }`;
+  const r = await (await fetch('https://apis.justwatch.com/graphql', { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Mozilla/5.0' }, body: JSON.stringify({ query: q }) })).json();
+  const n = r.data.popularTitles.edges[0].node;
+  console.log(new Date().toISOString(), n.content.title, JSON.stringify(n.offers.map((o) => `${o.package.clearName} ${o.monetizationType} ${o.dateCreated}`)));
 })();
