@@ -1,5 +1,5 @@
 // Posters with rating badges: the TMDB poster with an IMDb / Rotten Tomatoes strip drawn along
-// the bottom, and (in rows that mix services) a service tag in the top-left corner. Text is turned into vector shapes from the bundled font (assets/Inter-Bold.otf), so
+// the bottom, and (in rows that mix services) a service tag in the top-right corner. Text is turned into vector shapes from the bundled font (assets/Inter-Bold.otf), so
 // it doesn't depend on fonts being installed on the server.
 //
 // The ratings are part of the poster's address (/poster/tt123/78-92/abc.jpg), so a poster never
@@ -16,6 +16,7 @@ sharp.cache(false);
 
 const font = opentype.loadSync(path.join(__dirname, 'assets', 'Inter-Bold.otf'));
 const TMDB_IMG = process.env.TMDB_IMG_BASE || 'https://image.tmdb.org/t/p';
+const DESIGN = 2; // bump when the badge drawing changes (2: service tag moved to the right)
 const SIZE = 'w342';
 const rendering = limiter(2);
 
@@ -54,19 +55,20 @@ const TAGS = {
   lionsgate:   { label: 'Lionsgate',   bg: '#1F1F1F', fg: '#fff' },
 };
 
-// Tag in the top-left corner: first service, plus "+N" if it's on more.
-function serviceTag(k, services) {
+// Tag in the top-right corner (Stremio puts its own library tick top-left): first service, plus
+// "+N" if it's on more.
+function serviceTag(k, w, services) {
   const known = services.filter((s) => TAGS[s]);
   if (!known.length) return '';
   const tag = TAGS[known[0]];
   const label = known.length > 1 ? `${tag.label} +${known.length - 1}` : tag.label;
   const size = 19.5 * k;
   const h = 37 * k;
-  const w = textWidth(label, size) + 24 * k;
-  const x = 9 * k;
+  const tw = textWidth(label, size) + 24 * k;
+  const x = w - 9 * k - tw;
   const y = 9 * k;
-  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${8 * k}" fill="${tag.bg}"/>
-    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${8 * k}" fill="none" stroke="#000" stroke-opacity="0.25" stroke-width="${1.5 * k}"/>
+  return `<rect x="${x}" y="${y}" width="${tw}" height="${h}" rx="${8 * k}" fill="${tag.bg}"/>
+    <rect x="${x}" y="${y}" width="${tw}" height="${h}" rx="${8 * k}" fill="none" stroke="#000" stroke-opacity="0.25" stroke-width="${1.5 * k}"/>
     ${textPath(label, x + 12 * k, y + h / 2 + size * 0.36, size, tag.fg)}`;
 }
 
@@ -109,7 +111,7 @@ function overlay(w, h, imdb, rt, services = []) {
   return Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
       ${strip}
-      ${serviceTag(k, services)}
+      ${serviceTag(k, w, services)}
     </svg>`
   );
 }
@@ -147,9 +149,10 @@ function posterUrl(baseUrl, tt, tmdbPosterUrl, imdb, rt, services = []) {
   const tags = services.filter((x) => TAGS[x]);
   if (!baseUrl || !m || !/^tt\d+$/.test(tt || '') || (imdb == null && rt == null && !tags.length)) return tmdbPosterUrl;
   const code = `${imdb == null ? 'n' : Math.round(imdb * 10)}-${rt == null ? 'n' : rt}`;
+  // ?v= changes whenever the drawing changes, so apps re-fetch posters they've cached for good.
   return tags.length
-    ? `${baseUrl}/poster/${tt}/${code}/${tags.join('+')}/${m[1]}`
-    : `${baseUrl}/poster/${tt}/${code}/${m[1]}`;
+    ? `${baseUrl}/poster/${tt}/${code}/${tags.join('+')}/${m[1]}?v=${DESIGN}`
+    : `${baseUrl}/poster/${tt}/${code}/${m[1]}?v=${DESIGN}`;
 }
 
 // Express handler for /poster/:tt/:ratings/:file and /poster/:tt/:ratings/:services/:file
