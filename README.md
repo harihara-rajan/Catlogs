@@ -4,7 +4,8 @@ Adds 14 rows to Stremio: Tamil **movies** and **series** currently available in 
 
 Prime Video · aha · Netflix · SonyLIV · Sun NXT · JioHotstar · ZEE5
 
-Each row has a filter for **Popular / Newest / Top rated** and scrolls endlessly.
+Rows show the **newest releases first**. The dropdown on each row switches to **Popular**,
+**Top rated**, or a single **year** (1980 onwards). Rows scroll endlessly.
 
 This is a **catalog-only** addon: it lists titles and gives Stremio their IMDb IDs, so posters,
 details and episode lists come from Stremio's built-in metadata, and whatever stream addons you
@@ -58,8 +59,29 @@ Install on the TV:
 
 Then go to **Board** or **Discover** and pick e.g. "Netflix Tamil".
 
-Render's free tier sleeps after ~15 minutes of no use, so the first load after a break can take
-30–60 seconds. Everything after that is cached and quick.
+Render's free tier normally sleeps after ~15 minutes of no use (waking takes ~50 seconds). On
+Render the addon visits itself every 10 minutes so it stays awake (set `KEEP_AWAKE=0` to stop
+that), loads every row when it starts and again every 2 hours, and answers from its saved copy
+while refreshing in the background — so rows should open straight away.
+
+## New arrivals before TMDB catches up (`pins.json`)
+
+TMDB/JustWatch usually take 1–3 days to notice a new film on a service. To show it now, add it
+to `pins.json` under its service and commit (you can edit the file on github.com from your phone;
+Render redeploys by itself in about a minute):
+
+```json
+"sonyliv": [
+  { "title": "Meesaya Murukku 2", "year": 2026, "type": "movie", "added": "2026-11-06" }
+]
+```
+
+- Give a `title` + `year`, or an IMDb id instead: `{ "imdb": "tt1234567", "type": "movie", "added": "…" }`
+  (the IMDb id is in the address of the film's IMDb page). Use the IMDb id if a title search picks
+  the wrong film.
+- `type` is `movie` or `series`.
+- Pins sit at the top of the row's Newest and Popular views and vanish by themselves 14 days after
+  `added`, by which time TMDB has normally caught up. Leave out `added` to keep one pinned for good.
 
 ## Changing things
 
@@ -74,5 +96,6 @@ Render's free tier sleeps after ~15 minutes of no use, so the first load after a
 ## Files
 
 - `addon.js` — manifest, the 14 catalogs, and the catalog/meta handlers
-- `tmdb.js` — TMDB requests with in-memory caching
-- `server.js` — starts the HTTP server (port `PORT`, default 7000)
+- `tmdb.js` — TMDB requests with in-memory caching and a limit on parallel requests
+- `server.js` — starts the HTTP server (port `PORT`, default 7000), warm-up and keep-awake
+- `pins.json` — hand-added new arrivals
