@@ -17,7 +17,7 @@ sharp.cache(false);
 
 const font = opentype.loadSync(path.join(__dirname, 'assets', 'Inter-Bold.otf'));
 const TMDB_IMG = process.env.TMDB_IMG_BASE || 'https://image.tmdb.org/t/p';
-const DESIGN = 5; // bump when the badge drawing changes (2: tag right; 3: NEW ribbon; 4: sharper; 5: bigger for TVs)
+const DESIGN = 6; // bump when the badge drawing changes (2: tag right; 3: NEW; 4: sharper; 5: bigger; 6: NEW under tag)
 const SIZE = 'w500'; // big enough to stay sharp on a TV
 const rendering = limiter(2);
 
@@ -76,15 +76,15 @@ function serviceTag(k, w, services) {
 // "NEW · today" / "NEW · 3d"
 const newLabel = (days) => `NEW · ${days === 0 ? 'today' : `${days}d`}`;
 
-// White "NEW · 2d" chip in a top corner (right, unless a service tag is there).
-function newRibbon(k, w, days, left) {
+// White "NEW · 2d" chip in the top-right corner; when a service tag is there, just below it.
+function newRibbon(k, w, days, belowTag) {
   if (days == null) return '';
   const label = newLabel(days);
   const size = 18 * k;
   const h = 35 * k;
   const tw = textWidth(label, size) + 22 * k;
-  const x = left ? 9 * k : w - 9 * k - tw;
-  const y = 9 * k;
+  const x = w - 9 * k - tw;
+  const y = belowTag ? 9 * k + 37 * k + 6 * k : 9 * k; // service tag is 37k tall
   return `<rect x="${x}" y="${y}" width="${tw}" height="${h}" rx="${8 * k}" fill="#fff"/>
     <rect x="${x}" y="${y}" width="${tw}" height="${h}" rx="${8 * k}" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="${1.5 * k}"/>
     ${textPath(label, x + 11 * k, y + h / 2 + size * 0.36, size, '#15121c')}`;

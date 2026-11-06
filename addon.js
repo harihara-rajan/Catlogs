@@ -87,7 +87,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.2.2',
+  version: '2.3.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -342,12 +342,9 @@ function withRatings({ _services, _newDays, _banner, ...meta }, withRt) {
     imdbRating: imdb != null ? imdb.toFixed(1) : undefined,
     description: !line ? meta.description : meta.description ? `${line}\n\n${meta.description}` : line,
   };
-  // New This Week rows: wide banner instead of a poster.
-  const wide = _banner && banner.bannerUrl(BASE_URL, meta.type, _banner.tmdbId, imdb, services, _banner.days);
-  if (wide) {
-    out.poster = wide;
-    out.posterShape = 'landscape';
-  } else if (isImdb) {
+  // Wide "hero" banners (banner.js) are switched off: New This Week uses posters like the other
+  // rows. To bring them back, set m._banner in weekList and use banner.bannerUrl here.
+  if (isImdb) {
     out.poster = poster.posterUrl(BASE_URL, meta.id, meta.poster, imdb, rtScore, services, _newDays ?? null);
   }
   return out;
@@ -488,7 +485,7 @@ function weekList(row, apiKey) {
           const keys = e.services.filter((k) => x.services.has(k));
           m.description = `New on ${keys.map((k) => SERVICES[k].name).join(', ')} · ${shortDate(x.added)}${m.description ? '\n\n' + m.description : ''}`;
           m._services = keys;
-          m._banner = { tmdbId: String(tmdbId), days: daysSince(x.added) }; // wide "hero" card
+          m._newDays = daysSince(x.added); // "NEW · 2d" ribbon
           m._added = x.added;
           m._pop = d.popularity || 0;
           return m;

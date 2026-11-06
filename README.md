@@ -59,8 +59,8 @@ TMDB alone.
 - Original icon and background (`assets.js`, drawn at start-up: `/logo.png`, `/background.jpg`).
 - Row names lead with the language: "Tamil · Prime Video", "🆕 New This Week · Tamil",
   "🎙️ Tamil Dubbed · Malayalam & Hindi".
-- **New This Week** rows are wide "hero" banners (`banner.js`): the film's TMDB backdrop with
-  title, IMDb rating, year, genre, service tag and "NEW · 2d" (no backdrop → blurred poster).
+- **New This Week** rows use posters with the service tag and a "NEW · 2d" ribbon. (Wide "hero"
+  banners are available in `banner.js` but switched off.)
 - In the service rows, titles that arrived on that service in the last 7 days get a
   "NEW · 2d" ribbon on the poster.
 
