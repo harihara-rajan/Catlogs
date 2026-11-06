@@ -1,5 +1,5 @@
 // Posters with badges, drawn on the TMDB poster: an IMDb (/ Rotten Tomatoes) strip along the
-// bottom, a full-width service band along the top (rows that mix services), and a big "NEW" chip
+// bottom, a service chip (rows that mix services), and a big "NEW" chip
 // for recent arrivals. Text is turned into vector shapes from the bundled font
 // (assets/Inter-Bold.otf), so it doesn't depend on fonts being installed on the server.
 //
@@ -17,7 +17,7 @@ sharp.cache(false);
 
 const font = opentype.loadSync(path.join(__dirname, 'assets', 'Inter-Bold.otf'));
 const TMDB_IMG = process.env.TMDB_IMG_BASE || 'https://image.tmdb.org/t/p';
-const DESIGN = 7; // bump when the badge drawing changes (2: tag right; 3: NEW; 4: sharper; 5: bigger; 6: NEW under tag; 7: full-width service band, big NEW)
+const DESIGN = 8; // bump when the badge drawing changes (2: tag right; 3: NEW; 4: sharper; 5: bigger; 6: NEW under tag; 7: full-width service band, big NEW; 8: big service chip)
 const SIZE = 'w500'; // big enough to stay sharp on a TV
 const rendering = limiter(2);
 
@@ -56,35 +56,40 @@ const TAGS = {
   lionsgate:   { label: 'Lionsgate',   bg: '#1F1F1F', fg: '#fff' },
 };
 
-// Service band across the top of the poster (rows that mix services), in the service's colour:
-// first service, plus "+N" if it's on more. Full width and tall so it stays readable when a TV
-// shows the poster only ~200 px wide.
-function serviceBand(w, h, services) {
+// Chip sizes, as a share of the poster width (chosen to read on a TV, ~200 px per poster).
+const CHIP_H = 0.105;
+const CHIP_TEXT = 0.07;
+
+// Service chip in the service's colour, in the same style as the NEW chip: first service, plus
+// "+N" if it's on more. Big enough to read when a TV shows the poster ~200 px wide; shrinks to
+// fit `maxW`. Anchored at (x, y) from its left or right edge.
+function serviceChip(w, services, x, y, alignRight, maxW, size = w * CHIP_TEXT) {
   const known = services.filter((s) => TAGS[s]);
-  if (!known.length) return { svg: '', height: 0 };
+  if (!known.length) return { svg: '', height: 0, width: 0 };
   const tag = TAGS[known[0]];
   const label = known.length > 1 ? `${tag.label} +${known.length - 1}` : tag.label;
-  const bh = Math.round(h * 0.13);
-  let size = bh * 0.64;
-  while (textWidth(label, size) > w * 0.9) size -= 1;
-  const tx = (w - textWidth(label, size)) / 2;
+  while (size > w * 0.05 && textWidth(label, size) + size * 0.9 > maxW) size -= 1;
+  const ch = w * CHIP_H;
+  const cw = textWidth(label, size) + size * 0.9;
+  const left = alignRight ? x - cw : x;
   return {
-    height: bh,
-    svg: `<rect x="0" y="0" width="${w}" height="${bh}" fill="${tag.bg}"/>
-    <rect x="0" y="${bh}" width="${w}" height="${Math.max(2, h * 0.004)}" fill="#000" fill-opacity="0.35"/>
-    ${textPath(label, tx, bh / 2 + size * 0.36, size, tag.fg)}`,
+    height: ch,
+    width: cw,
+    svg: `<rect x="${left}" y="${y}" width="${cw}" height="${ch}" rx="${ch * 0.22}" fill="${tag.bg}"/>
+    <rect x="${left}" y="${y}" width="${cw}" height="${ch}" rx="${ch * 0.22}" fill="none" stroke="#000" stroke-opacity="0.35" stroke-width="${w * 0.005}"/>
+    ${textPath(label, left + size * 0.45, y + ch / 2 + size * 0.36, size, tag.fg)}`,
   };
 }
 
 // "NEW · today" / "NEW · 3d" (used in descriptions and banners)
 const newLabel = (days) => `NEW · ${days === 0 ? 'today' : `${days}d`}`;
 
-// Big yellow "NEW" chip in the top-right corner, below the service band if there is one.
+// Yellow "NEW" chip in the top-right corner, below the service chip if there is one.
 function newChip(w, h, days, top) {
   if (days == null) return '';
   const label = 'NEW';
-  const size = w * 0.1;
-  const ch = size * 1.5;
+  const size = w * 0.078;
+  const ch = w * CHIP_H;
   const cw = textWidth(label, size) + size * 0.9;
   const m = w * 0.03;
   const x = w - m - cw;
@@ -92,6 +97,13 @@ function newChip(w, h, days, top) {
   return `<rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="${ch * 0.22}" fill="#FFD60A"/>
     <rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="${ch * 0.22}" fill="none" stroke="#000" stroke-opacity="0.45" stroke-width="${w * 0.005}"/>
     ${textPath(label, x + size * 0.45, y + ch / 2 + size * 0.36, size, '#111')}`;
+}
+
+// Service chip in the top-right corner, NEW chip just below it.
+function tagsSvg(w, h, services, newDays) {
+  const m = w * 0.03;
+  const chip = serviceChip(w, services, w - m, m, true, w - 2 * m);
+  return chip.svg + newChip(w, h, newDays, chip.height ? chip.height + m * 0.3 : 0);
 }
 
 // SVG overlay (same size as the poster): ratings strip at the bottom, service tag at the top.
@@ -103,7 +115,6 @@ function overlay(w, h, imdb, rt, services = [], newDays = null) {
   const midY = y0 + stripH / 2;
   const num = 24 * k; // number size
   const parts = [];
-  const band = serviceBand(w, h, services);
   let x = pad + 12 * k;
 
   if (imdb != null) {
@@ -134,8 +145,7 @@ function overlay(w, h, imdb, rt, services = [], newDays = null) {
   return Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
       ${strip}
-      ${band.svg}
-      ${newChip(w, h, newDays, band.height)}
+      ${tagsSvg(w, h, services, newDays)}
     </svg>`
   );
 }
