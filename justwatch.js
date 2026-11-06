@@ -34,7 +34,7 @@ async function recent(country, packages, type) {
   if (!packages || !packages.length) return [];
   const f = await file();
   const days = f.sets[`${country}:${packages.join(',')}`];
-  if (!days) throw new Error(`arrivals file has no data for ${country}:${packages.join(',')}`);
+  if (!days) return []; // not collected (e.g. English rows, which default to Popular)
   const seen = new Set();
   const out = [];
   for (const d of Object.keys(days).sort().reverse()) {
