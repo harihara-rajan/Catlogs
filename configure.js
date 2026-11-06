@@ -62,6 +62,9 @@ module.exports = function configurePage({ languages, selected, needsKey, version
   <div class="msg" id="msg" role="status"></div>
   <div class="link" id="link"></div>
 
+  <p class="note">English rows show what's on each service in India or the US. The more you tick, the
+  shorter the year list in each row's dropdown (Stremio limits how big an addon can be); newest-first
+  sorting always works.</p>
   <p class="note">Changing languages? Uninstall the old version in Stremio first, then install again.
   If “Install” doesn't open Stremio, copy the link and paste it into the search box on Stremio's Addons page.</p>
   <p class="note">v${esc(version)}</p>

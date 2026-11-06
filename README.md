@@ -1,21 +1,24 @@
-# OTT Catalogs — Stremio addon (Tamil · Malayalam · Hindi)
+# OTT Catalogs — Stremio addon (Tamil · Malayalam · Hindi · English)
 
 Adds rows to Stremio for **movies** and **series** currently available in **India**, per
 language and service. You pick the languages on the install page (`/configure`):
 
-| Language  | Services |
-|-----------|----------|
-| Tamil     | Prime Video · aha · Netflix · SonyLIV · Sun NXT · JioHotstar · ZEE5 |
-| Malayalam | Prime Video · Netflix · SonyLIV · JioHotstar · ZEE5 · ManoramaMAX (movies only) |
-| Hindi     | Prime Video · Netflix · SonyLIV · JioHotstar · ZEE5 |
+| Tick box        | Country | Services |
+|-----------------|---------|----------|
+| Tamil           | India   | Prime Video · aha · Netflix · SonyLIV · Sun NXT · JioHotstar · ZEE5 |
+| Malayalam       | India   | Prime Video · Netflix · SonyLIV · JioHotstar · ZEE5 · ManoramaMAX (movies only) |
+| Hindi           | India   | Prime Video · Netflix · SonyLIV · JioHotstar · ZEE5 |
+| English (India) | India   | Netflix · Prime Video · JioHotstar · Apple TV · SonyLIV · Lionsgate Play |
+| English (US)    | US      | Netflix · Prime Video · Disney+ · HBO Max · Hulu · Apple TV · Paramount+ · Peacock |
 
 Rows show the **newest releases first**. The dropdown on each row switches to **Popular**,
-**Top rated**, or a year range. Stremio rejects addon manifests over 8 KB, so the dropdown adapts:
-with one language it lists every year back to 1980; with more languages (more rows) it lists
-recent years plus decades and "Older" (before 2000). Rows scroll endlessly.
+**Top rated**, or a year range. Stremio rejects addon manifests over 8 KB, so the dropdown adapts
+to the number of rows: every year back to 1980 when it fits, then recent years plus decades and
+"Older" (before 2000), then decades only, then just the sort orders; with four or five boxes ticked
+there's no dropdown and rows are simply newest first. Rows scroll endlessly.
 
 The plain `/manifest.json` link installs Tamil only (what earlier versions had). Other choices
-put the settings in the link, e.g. `/{"languages":"ta,ml"}/manifest.json` — the install page
+put the settings in the link, e.g. `/{"languages":"ta,en-us"}/manifest.json` — the install page
 builds it for you. Stremio's **Configure** button on the installed addon reopens that page.
 
 This is a **catalog-only** addon: it lists titles and gives Stremio their IMDb IDs, so posters,
@@ -85,15 +88,11 @@ itself, open the service on Render and tap **Manual Deploy → Deploy latest com
 
 ## Changing things
 
-- **Services**: edit the `SERVICES` list at the top of `addon.js` (`langs` says which languages
-  get a row for that service). Service names are matched against TMDB's India provider list
-  automatically (so "Netflix basic with Ads" counts as Netflix); the numeric `fallback` IDs are
-  only used if that list can't be loaded. Add the service's JustWatch short name to `PACKAGES`
-  in `justwatch.js` too.
-- **Languages**: add to `LANGUAGES` in `addon.js` (TMDB codes: `te` Telugu, `kn` Kannada, …) and
-  to the services' `langs`. Watch the 8 KB manifest limit if every language is ticked.
-- **Country**: change `watch_region: 'IN'` in `addon.js` and `tmdb.js` (`DK` gives you what's on the
-  Danish versions of these services).
+- **Services and tick boxes**: `SERVICES` at the top of `addon.js` lists each service's TMDB
+  provider IDs and JustWatch package names per country (TMDB and JustWatch use the same IDs;
+  JustWatch's `packages(country: XX, platform: WEB)` query lists them). `EDITIONS` defines the tick
+  boxes: language, country, movies/series, and which services get rows. Watch the 8 KB manifest
+  limit when adding rows.
 
 ## Files
 

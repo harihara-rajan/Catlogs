@@ -11,6 +11,15 @@ const HOUR = 3600 * 1000;
 const DAY = 24 * HOUR;
 const limited = limiter(16);
 
+// TMDB allows roughly 40-50 requests a second; space request starts at least 25 ms apart.
+let nextSlot = 0;
+async function paced() {
+  const now = Date.now();
+  const wait = Math.max(0, nextSlot - now);
+  nextSlot = Math.max(now, nextSlot) + 25;
+  if (wait) await new Promise((r) => setTimeout(r, wait));
+}
+
 // v4 "API Read Access Token" is a JWT (starts with eyJ); v3 key is a 32-char hex string.
 const isBearer = (key) => typeof key === 'string' && key.startsWith('eyJ');
 
@@ -30,7 +39,14 @@ async function get(path, params, apiKey, ttl) {
       if (isBearer(apiKey)) headers.Authorization = `Bearer ${apiKey}`;
       else reqUrl.searchParams.set('api_key', apiKey);
 
-      const res = await fetch(reqUrl, { headers, signal: AbortSignal.timeout(15000) });
+      await paced();
+      let res = await fetch(reqUrl, { headers, signal: AbortSignal.timeout(15000) });
+      if (res.status === 429) {
+        // Over the rate limit: wait as told (or 2 s) and try once more.
+        const secs = Number(res.headers.get('retry-after')) || 2;
+        await new Promise((r) => setTimeout(r, secs * 1000));
+        res = await fetch(reqUrl, { headers, signal: AbortSignal.timeout(15000) });
+      }
       if (res.status === 401) throw new Error('TMDB rejected the API key (401)');
       if (res.status === 429) throw new Error('TMDB rate limit hit (429)');
       if (!res.ok) throw new Error(`TMDB ${res.status} for ${path}`);

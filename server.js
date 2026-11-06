@@ -35,7 +35,7 @@ function sendConfigure(req, res) {
   res.setHeader('Cache-Control', 'no-cache');
   res.end(
     configurePage({
-      languages: addonInterface.LANGUAGES,
+      languages: addonInterface.EDITIONS,
       selected: addonInterface.languagesFrom(config),
       needsKey: !addonInterface.hasServerKey,
       version: addonInterface.manifest.version,
