@@ -1,13 +1,17 @@
-const A = 'https://tamil-ott-catalogs.onrender.com';
+const JW = 'https://apis.justwatch.com/graphql';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function q(name, query, variables = {}) {
+  const r = await fetch(JW, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Mozilla/5.0' }, body: JSON.stringify({ query, variables }) });
+  const t = await r.text();
+  console.log(`\n### ${name} (${r.status})\n${t.slice(0, 2500)}`);
+  await sleep(2500);
+}
 (async () => {
-  for (let i = 0; i < 40; i++) {
-    try { const m = await (await fetch(`${A}/manifest.json?x=${Date.now()}`)).json(); if (m.version === '2.3.4') { console.log('live', m.version); break; } } catch (e) {}
-    await sleep(15000);
-  }
-  for (const id of ['ta-new-movie', 'ml-new-movie']) {
-    let c; for (let i = 0; i < 20; i++) { c = await (await fetch(`${A}/catalog/movie/${id}.json`)).json(); if (c.metas.length) break; await sleep(15000); }
-    const u = c.metas[0].poster; const r = await fetch(u);
-    console.log(id, (/v=(\d+)/.exec(u) || [])[1], r.status, r.headers.get('content-length'));
-  }
+  await q('suggest root', '{ upcoming }');
+  await q('suggest root2', '{ upcomingTitles }');
+  await q('node upcoming', `{ popularTitles(country: IN, first: 1, filter: { searchQuery: "Kantara" }) { edges { node { id upcomingReleases { releaseDate } } } } }`);
+  await q('node upcoming fields', `{ popularTitles(country: IN, first: 1, filter: { searchQuery: "Kantara" }) { edges { node { id upcomingReleases(releaseTypes: [DIGITAL]) { releaseCountDown releaseDate label package { shortName clearName } } } } } }`);
+  await q('newTitles future', `{ newTitles(country: IN, date: "2026-11-14", first: 10, filter: { packages: ["nfx","prv","jhs","zee","snl","aha","snx"] }) { totalCount edges { node { content(country: IN, language: en) { title originalReleaseYear } } } } }`);
+  await q('newTitles pageType', `{ newTitles(country: IN, date: "2026-11-14", first: 10, pageType: UPCOMING, filter: { packages: ["nfx","prv","jhs","zee","snl","aha","snx"] }) { totalCount edges { node { content(country: IN, language: en) { title } } } } }`);
+  await q('newTitles upcoming arg', `{ newTitles(country: IN, date: "2026-11-14", first: 10, upcoming: true) { totalCount } }`);
 })();
