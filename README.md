@@ -14,8 +14,9 @@ language and service. You pick the languages on the install page (`/configure`):
 
 Tamil, Malayalam and Hindi also get **New This Week** rows at the top: titles in that language that
 arrived on any of its services in the last 7 days, most recent first, with where and when in the
-description. JustWatch sometimes re-lists titles that have been on a service for years, so only
-titles released in the two years before they turned up count as new. Check with `/debug/week/ta-new-movie`.
+description. JustWatch sometimes catches up on a service in one go (e.g. ~600 ZEE5 titles in a
+day), giving old titles today's date: on such days (>40 additions for that service) only titles
+released in the previous 3 months count as new; on normal days, those from the last 2 years. Check with `/debug/week/ta-new-movie`.
 
 The **Tamil dubbed** row uses the audio languages JustWatch records for each streaming offer. The
 GitHub job re-scans those services' movie catalogues about once a day (`scripts/fetch-dubs.js`,
