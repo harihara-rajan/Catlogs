@@ -9,8 +9,8 @@ async function q(name, query, variables = {}, n = 1500) {
 }
 const PK = ["nfx","prv","jhs","zee","snl","aha","snx","mrx"];
 (async () => {
-  const counts = await q('per package', `{ ${PK.map((p) => `${p}: newTitles(country: IN, date: "2026-11-06", first: 1, pageType: UPCOMING, filter: { packages: ["${p}"] }) { totalCount }`).join(' ')} }`);
-  const fields = `content(country: IN, language: en) { title originalReleaseYear originalReleaseDate externalIds { imdbId tmdbId } upcomingReleases { releaseDate releaseType label releaseCountDown package { shortName } } }`;
+
+  const fields = `content(country: IN, language: en) { title originalReleaseYear originalReleaseDate externalIds { imdbId tmdbId } upcomingReleases { releaseDate releaseType label package { shortName } } }`;
   const r = await q('content upcoming', `{ newTitles(country: IN, date: "2026-11-06", first: 3, pageType: UPCOMING, filter: { packages: ${JSON.stringify(PK)} }) { edges { node { id ${fields} } } } }`);
   if (r && r.data) {
     let after = null; const all = [];
