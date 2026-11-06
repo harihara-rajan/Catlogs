@@ -39,8 +39,9 @@ function sendConfigure(req, res) {
   res.setHeader('Cache-Control', 'no-cache');
   res.end(
     configurePage({
-      languages: addonInterface.EDITIONS.map((e) => ({ code: e.code, name: e.name, desc: addonInterface.describe(e) })),
+      languages: addonInterface.EDITIONS.map((e) => ({ code: e.code, name: e.name, desc: addonInterface.describe(e), chips: addonInterface.chipsOf(e) })),
       selected: addonInterface.languagesFrom(config),
+      chips: Object.fromEntries(Object.entries(addonInterface.chipsFrom(config)).map(([k, v]) => [k, v ? [...v] : null])),
       needsKey: !addonInterface.hasServerKey,
       version: addonInterface.manifest.version,
     })

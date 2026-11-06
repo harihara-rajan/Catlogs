@@ -2,17 +2,27 @@
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// languages: [{ code, name, desc }]
-module.exports = function configurePage({ languages, selected, needsKey, version }) {
+// languages: [{ code, name, desc, chips: [{ key, name }] }]; selected: [code];
+// chips: { code: [chip keys] | null (= all) } for the selected tick boxes
+module.exports = function configurePage({ languages, selected, chips = {}, needsKey, version }) {
   const boxes = languages
-    .map(
-      (l) => `
-      <label class="opt">
-        <input type="checkbox" name="lang" value="${esc(l.code)}" ${selected.includes(l.code) ? 'checked' : ''}>
-        <span class="box" aria-hidden="true"></span>
-        <span class="txt"><span class="lbl">${esc(l.name)}</span>${l.desc ? `<span class="desc">${esc(l.desc)}</span>` : ''}</span>
-      </label>`
-    )
+    .map((l) => {
+      const on = (key) => !chips[l.code] || chips[l.code].includes(key);
+      const chipRow = l.chips && l.chips.length
+        ? `<div class="chips" data-for="${esc(l.code)}" role="group" aria-label="${esc(l.name)} rows">
+            ${l.chips.map((c) => `<button type="button" class="chip${on(c.key) ? ' on' : ''}" data-key="${esc(c.key)}" aria-pressed="${on(c.key)}">${esc(c.name)}</button>`).join('')}
+           </div>`
+        : '';
+      return `
+      <div class="item">
+        <label class="opt">
+          <input type="checkbox" name="lang" value="${esc(l.code)}" ${selected.includes(l.code) ? 'checked' : ''}>
+          <span class="box" aria-hidden="true"></span>
+          <span class="txt"><span class="lbl">${esc(l.name)}</span>${l.desc ? `<span class="desc">${esc(l.desc)}</span>` : ''}</span>
+        </label>
+        ${chipRow}
+      </div>`;
+    })
     .join('');
 
   return `<!doctype html>
@@ -39,8 +49,19 @@ module.exports = function configurePage({ languages, selected, needsKey, version
   .tag { margin:2px 0 0; color:var(--muted); font-size:14px; }
   .intro { color:var(--muted); margin:18px 0 18px; font-size:15px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:6px; margin-bottom:20px; }
+  .item { position:relative; }
+  .item + .item::before { content:""; position:absolute; top:0; left:12px; right:12px; border-top:1px solid var(--line); }
   .opt { display:flex; align-items:flex-start; gap:14px; padding:14px 12px; border-radius:12px; cursor:pointer; position:relative; }
-  .opt + .opt::before { content:""; position:absolute; top:0; left:12px; right:12px; border-top:1px solid var(--line); }
+  .chips { display:none; flex-wrap:wrap; gap:8px; padding:0 12px 14px 50px; }
+  .item.open .chips { display:flex; }
+  .item.open .desc { display:none; }
+  .chip { font:inherit; font-size:14px; font-weight:600; padding:7px 12px; border-radius:999px; cursor:pointer;
+          border:1px solid var(--line); background:transparent; color:var(--muted); transition:.15s; }
+  .chip.on { background:rgba(109,74,255,.22); border-color:rgba(155,133,255,.7); color:var(--text); }
+  .chip.on::before { content:"✓ "; }
+  .chip:focus-visible { outline:2px solid var(--pink); outline-offset:2px; }
+  .hint { font-size:12.5px; color:var(--muted); padding:0 12px 12px 50px; display:none; }
+  .item.open .hint { display:block; }
   .opt:hover { background:var(--card2); }
   .opt input { position:absolute; opacity:0; pointer-events:none; }
   .box { width:24px; height:24px; margin-top:1px; border-radius:7px; border:2px solid var(--muted); flex:none; display:grid; place-items:center; transition:.15s; }
@@ -73,7 +94,7 @@ module.exports = function configurePage({ languages, selected, needsKey, version
       <p class="tag">What's on your streaming services, newest first</p>
     </div>
   </header>
-  <p class="intro">Pick the rows you want in Stremio. Each gives one row per service, with IMDb ratings on the posters.</p>
+  <p class="intro">Tick a language, then switch off any services you don't want. Each service gives its own row, with IMDb ratings on the posters.</p>
 
   <div class="card" role="group" aria-label="Languages">${boxes}
   </div>
@@ -85,7 +106,7 @@ module.exports = function configurePage({ languages, selected, needsKey, version
   <div class="link" id="link"></div>
 
   <div class="notes">
-    <p>The more you tick, the shorter the year list in each row's dropdown (Stremio limits how big an addon can be); newest-first sorting always works.</p>
+    <p>The fewer rows you pick, the longer the year list in each row's dropdown (Stremio limits how big an addon can be); newest-first sorting always works.</p>
     <p>Changing your choice? Uninstall the old version in Stremio first, then install again. If “Install” doesn't open Stremio, copy the link and paste it into the search box on Stremio's Addons page.</p>
   </div>
   <p class="ver">v${esc(version)}</p>
@@ -98,11 +119,41 @@ module.exports = function configurePage({ languages, selected, needsKey, version
   const link = document.getElementById('link');
   const msg = document.getElementById('msg');
 
+  const chipsFor = (code) => document.querySelector('.chips[data-for="' + code + '"]');
+
+  // Open the chip list of ticked languages.
+  function syncOpen() {
+    boxes.forEach((b) => b.closest('.item').classList.toggle('open', b.checked));
+  }
+
+  document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => {
+    const on = !c.classList.contains('on');
+    c.classList.toggle('on', on);
+    c.setAttribute('aria-pressed', on);
+    // All switched off: untick the language.
+    const group = c.closest('.chips');
+    if (!group.querySelector('.chip.on')) {
+      const box = boxes.find((b) => b.value === group.dataset.for);
+      box.checked = false;
+      group.querySelectorAll('.chip').forEach((x) => { x.classList.add('on'); x.setAttribute('aria-pressed', true); });
+      syncOpen();
+    }
+    update();
+  }));
+
   function manifestUrl() {
     const langs = boxes.filter((b) => b.checked).map((b) => b.value);
     if (!langs.length) return null;
     const cfg = {};
     if (!(langs.length === 1 && langs[0] === 'ta')) cfg.languages = langs.join(',');
+    // Only save a service choice when some are switched off (none saved = all rows).
+    for (const code of langs) {
+      const group = chipsFor(code);
+      if (!group) continue;
+      const all = [...group.querySelectorAll('.chip')];
+      const on = all.filter((c) => c.classList.contains('on')).map((c) => c.dataset.key);
+      if (on.length && on.length < all.length) cfg[code] = on.join(',');
+    }
     if (key && key.value.trim()) cfg.tmdbApiKey = key.value.trim();
     const prefix = Object.keys(cfg).length ? '/' + encodeURIComponent(JSON.stringify(cfg)) : '';
     return location.origin + prefix + '/manifest.json';
@@ -125,7 +176,8 @@ module.exports = function configurePage({ languages, selected, needsKey, version
     catch { msg.textContent = 'Copy failed — press and hold the link below to copy it.'; }
   });
 
-  boxes.forEach((b) => b.addEventListener('change', update));
+  boxes.forEach((b) => b.addEventListener('change', () => { syncOpen(); update(); }));
+  syncOpen();
   if (key) key.addEventListener('input', update);
   update();
 </script>

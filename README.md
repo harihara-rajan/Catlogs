@@ -29,6 +29,10 @@ to the number of rows: every year back to 1980 when it fits, then recent years p
 "Older" (before 2000), then decades only, then just the sort orders; with four or five boxes ticked
 there's no dropdown and rows are simply newest first. Rows scroll endlessly.
 
+On the install page each ticked language shows its services (and New This Week) as switches, so
+you can pick e.g. only Tamil Netflix and Prime Video; the choice is saved in the link as
+`"ta":"new,netflix,prime"` (no entry = all rows).
+
 The plain `/manifest.json` link installs Tamil only (what earlier versions had). Other choices
 put the settings in the link, e.g. `/{"languages":"ta,en-us"}/manifest.json` — the install page
 builds it for you. Stremio's **Configure** button on the installed addon reopens that page.

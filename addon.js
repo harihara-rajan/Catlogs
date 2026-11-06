@@ -87,7 +87,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.0.1',
+  version: '2.1.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -114,8 +114,34 @@ function languagesFrom(config) {
 
 // Manifest for one install: only the chosen rows, named after them, with the richest dropdown
 // that still fits.
+// Which rows of each tick box were chosen: config["ta"] = "new,prime,netflix" (chip keys: "new" for
+// New This Week, otherwise service keys). A tick box without a choice gets all its rows, so older
+// install links keep working. -> code -> Set of chip keys (null = all)
+function chipsFrom(config) {
+  const out = {};
+  for (const code of languagesFrom(config)) {
+    const raw = config && typeof config[code] === 'string' ? config[code] : null;
+    out[code] = raw ? new Set(raw.split(',').map((x) => x.trim()).filter(Boolean)) : null;
+  }
+  return out;
+}
+
+// Chips a tick box offers on the install page: New This Week (if it has it), then its services.
+function chipsOf(e) {
+  if (e.audio) return [];
+  return [...(e.newThisWeek ? [{ key: 'new', name: 'New This Week' }] : []), ...e.services.map((k) => ({ key: k, name: SERVICES[k].name }))];
+}
+
+function rowChosen(r, chips) {
+  const set = chips[r.edition.code];
+  if (set === undefined) return false; // tick box not chosen
+  if (set === null || r.dub) return true; // all rows
+  return set.has(r.newWeek ? 'new' : r.serviceKey);
+}
+
 function manifestFor(config) {
   const codes = languagesFrom(config);
+  const chips = chipsFrom(config);
   const names = TICK_BOXES.filter((e) => codes.includes(e.code)).map((e) => e.shortName || e.name);
   const m = JSON.parse(JSON.stringify(manifest));
   m.name = names.length === 1 ? `${names[0]} OTT Catalogs` : `OTT Catalogs (${names.join(', ')})`;
@@ -123,7 +149,8 @@ function manifestFor(config) {
   const hasKey = ENV_KEY || (config && config.tmdbApiKey);
   m.behaviorHints = { configurable: true, configurationRequired: !hasKey };
   // All "New This Week" rows go to the very top, then every other row in its usual order.
-  const chosen = ROWS.filter((r) => codes.includes(r.edition.code));
+  let chosen = ROWS.filter((r) => rowChosen(r, chips));
+  if (!chosen.length) chosen = ROWS.filter((r) => codes.includes(r.edition.code)); // nothing valid picked: all
   const rows = [...chosen.filter((r) => r.newWeek), ...chosen.filter((r) => !r.newWeek)];
   for (const options of DROPDOWN_TIERS) {
     m.catalogs = rows.map((r) => catalogEntry(r, options));
@@ -513,4 +540,6 @@ module.exports.warmUp = warmUp;
 module.exports.arrivalStats = (id) => ({ row: arrivalStats.get(id) || 'not checked yet', justwatch: justwatch.status() });
 module.exports.manifestFor = manifestFor;
 module.exports.languagesFrom = languagesFrom;
+module.exports.chipsFrom = chipsFrom;
+module.exports.chipsOf = chipsOf;
 module.exports.hasServerKey = !!ENV_KEY;
