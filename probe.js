@@ -1,19 +1,20 @@
 const A = 'https://tamil-ott-catalogs.onrender.com';
-const j = async (u) => (await fetch(A + u)).json();
+const JW = 'https://apis.justwatch.com/graphql';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const PK = { 'Prime Video': 'prv', aha: 'aha', Netflix: 'nfx', SonyLIV: 'snl', 'Sun NXT': 'snx', JioHotstar: 'jhs', ZEE5: 'zee', ManoramaMAX: 'mrx' };
 (async () => {
-  for (let i = 0; i < 20; i++) {
-    let v = '?'; try { v = (await j('/manifest.json')).version; } catch { v = 'unreachable'; }
-    if (v === '2.2.1') { console.log('live', v); break; }
-    await new Promise((r) => setTimeout(r, 10000));
-  }
-  await new Promise((r) => setTimeout(r, 50000));
-  for (const [t, id] of [['movie', 'ta-new-movie'], ['movie', 'ta-zee5-movie']]) {
-    const c = await j(`/catalog/${t}/${id}.json`);
-    for (const x of c.metas.slice(0, 3)) {
-      const t0 = Date.now(); const r = await fetch(x.poster); const b = Buffer.from(await r.arrayBuffer());
-      // JPEG size from SOF0/SOF2 marker
-      let w = 0, h = 0; for (let k = 2; k < b.length - 9; k++) if (b[k] === 0xff && (b[k + 1] === 0xc0 || b[k + 1] === 0xc2)) { h = b.readUInt16BE(k + 5); w = b.readUInt16BE(k + 7); break; }
-      console.log(id.padEnd(14), x.name.slice(0, 22).padEnd(23), r.status, `${w}x${h}`, Math.round(b.length / 1024) + 'KB', (Date.now() - t0) + 'ms', x.poster.replace(A, '').slice(0, 60));
-    }
+  const c = await (await fetch(`${A}/catalog/movie/ta-new-movie.json`)).json();
+  console.log(c.metas.length, 'titles in New This Week · Tamil');
+  for (const m of c.metas.slice(0, 18)) {
+    const line = (m.description || '').split('\n').find((l) => l.startsWith('New on')) || '';
+    const svc = line.replace(/^New on /, '').split(' · ')[0].split(', ');
+    const q = `query($q: String!) { popularTitles(country: IN, filter: { searchQuery: $q, objectTypes: [MOVIE] }, first: 1) { edges { node { content(country: IN, language: en) { title originalReleaseYear externalIds { imdbId } } offers(country: IN, platform: WEB) { monetizationType presentationType dateCreated package { shortName } } } } } }`;
+    const r = await (await fetch(JW, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Mozilla/5.0' }, body: JSON.stringify({ query: q, variables: { q: m.name } }) })).json();
+    const n = r.data && r.data.popularTitles.edges[0] && r.data.popularTitles.edges[0].node;
+    const pk = svc.map((s) => PK[s]).filter(Boolean);
+    const offers = n ? n.offers.filter((o) => pk.includes(o.package.shortName)) : [];
+    const first = offers.map((o) => o.dateCreated).sort()[0];
+    console.log(`${m.name.slice(0, 26).padEnd(27)} ${m.releaseInfo} | addon: ${line.slice(0, 32).padEnd(32)} | JW first offer on that service: ${first || '?'} | offers: ${offers.map((o) => o.monetizationType + '/' + o.presentationType + '@' + (o.dateCreated || '').slice(0, 10)).join(' ')}`);
+    await sleep(1200);
   }
 })();
