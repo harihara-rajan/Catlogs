@@ -1,6 +1,7 @@
-# Collects new arrivals from JustWatch every 30 minutes and publishes them as arrivals.json on the
-# `data` branch, which the addon reads. (JustWatch rate-limits Render's shared addresses, so this
-# runs on GitHub instead.)
+# Collects data from JustWatch and publishes it on the `data` branch, which the addon reads:
+#   arrivals.json  new arrivals per service (every 30 minutes)
+#   dubs.json      films with a Tamil audio track per service (re-scanned about once a day)
+# (JustWatch rate-limits Render's shared addresses, so this runs on GitHub instead.)
 name: new-arrivals
 
 on:
@@ -10,7 +11,7 @@ on:
   push:
     branches: [main]
     paths:
-      - scripts/fetch-arrivals.js
+      - scripts/**
       - services.js
       - .github/workflows/arrivals.yml
 
@@ -18,36 +19,47 @@ permissions:
   contents: write
 
 concurrency:
-  group: new-arrivals
+  group: data-branch
   cancel-in-progress: false
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get the previous file
+      - name: Get the previous files
         run: |
+          echo '{}' > previous.json
+          echo '{}' > previous-dubs.json
           if git fetch --depth=1 origin data 2>/dev/null; then
-            git show origin/data:arrivals.json > previous.json || echo '{}' > previous.json
-          else
-            echo '{}' > previous.json
+            git show origin/data:arrivals.json > previous.json 2>/dev/null || echo '{}' > previous.json
+            git show origin/data:dubs.json > previous-dubs.json 2>/dev/null || echo '{}' > previous-dubs.json
           fi
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - run: node scripts/fetch-arrivals.js previous.json arrivals.json
+      - name: New arrivals
+        continue-on-error: true
+        run: node scripts/fetch-arrivals.js previous.json arrivals.json
+
+      - name: Tamil dubs (re-scanned about once a day)
+        continue-on-error: true
+        run: node scripts/fetch-dubs.js previous-dubs.json dubs.json
 
       - name: Publish to the data branch
         run: |
-          mkdir publish && cp arrivals.json publish/ && cd publish
+          mkdir publish
+          if [ -s arrivals.json ]; then cp arrivals.json publish/; elif [ "$(cat previous.json)" != "{}" ]; then cp previous.json publish/arrivals.json; fi
+          if [ -s dubs.json ]; then cp dubs.json publish/; elif [ "$(cat previous-dubs.json)" != "{}" ]; then cp previous-dubs.json publish/dubs.json; fi
+          cd publish
+          if [ -z "$(ls)" ]; then echo "Nothing to publish"; exit 1; fi
           git init -q -b data
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add arrivals.json
-          git commit -q -m "New arrivals $(date -u +%Y-%m-%dT%H:%MZ)"
+          git add .
+          git commit -q -m "Data $(date -u +%Y-%m-%dT%H:%MZ)"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" data

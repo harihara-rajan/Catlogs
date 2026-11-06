@@ -10,6 +10,13 @@ language and service. You pick the languages on the install page (`/configure`):
 | Hindi           | India   | Prime Video · Netflix · SonyLIV · JioHotstar · ZEE5 |
 | English (India) | India   | Netflix · Prime Video · JioHotstar · Apple TV · SonyLIV · Lionsgate Play |
 | English (US)    | US      | Netflix · Prime Video · Disney+ · HBO Max · Hulu · Apple TV · Paramount+ · Peacock |
+| Tamil dubbed (Malayalam & Hindi) | India | One movies row: Malayalam and Hindi films with a Tamil audio track on Prime Video · JioHotstar · SonyLIV · ZEE5 · aha |
+
+The **Tamil dubbed** row uses the audio languages JustWatch records for each streaming offer. The
+GitHub job re-scans those services' movie catalogues about once a day (`scripts/fetch-dubs.js`,
+published as `dubs.json` on the `data` branch). Netflix and Sun NXT don't share audio languages
+with JustWatch, so their dubs can't be included; ZEE5 shares them for only some titles. Check what
+the server has with `/debug/dubs/ta-dub-movie`.
 
 Rows show the **newest releases first** (English rows: **most popular first**). The dropdown on each row switches to **Popular**,
 **Top rated**, or a year range. Stremio rejects addon manifests over 8 KB, so the dropdown adapts
@@ -123,5 +130,6 @@ itself, open the service on Render and tap **Manual Deploy → Deploy latest com
 - `poster.js` — posters with rating badges
 - `justwatch.js` — reads the new-arrivals file
 - `services.js` — services per country and the tick boxes
-- `scripts/fetch-arrivals.js` — the GitHub job that collects new arrivals from JustWatch
+- `scripts/fetch-arrivals.js`, `scripts/fetch-dubs.js` — the GitHub job that collects new arrivals and dubbed audio tracks from JustWatch
+- `dubs.js` — reads the dubbed-audio file
 - `cache.js` — in-memory cache and request limiter

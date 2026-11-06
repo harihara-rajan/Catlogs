@@ -6,7 +6,11 @@ const imdbRatings = require('./imdb-ratings');
 const mdblist = require('./mdblist');
 const poster = require('./poster');
 
-const { SERVICES, EDITIONS } = require('./services');
+const { SERVICES, EDITIONS, DUB_EDITIONS } = require('./services');
+const dubs = require('./dubs');
+
+// Every tick box on the install page: language rows first, then the "dubbed" rows.
+const TICK_BOXES = [...EDITIONS, ...DUB_EDITIONS];
 
 // Dropdown on each row: sort orders, then single years and/or decades. No choice = Newest.
 // Stremio rejects manifests over 8 KB, so installs with more rows get a shorter dropdown
@@ -53,6 +57,10 @@ const ROWS = EDITIONS.flatMap((e) =>
     }))
   )
 );
+// One movies row per "dubbed" tick box, e.g. ta-dub-movie.
+for (const e of DUB_EDITIONS) {
+  ROWS.push({ id: `${e.code}-movie`, type: 'movie', name: e.rowName, edition: e, dub: true });
+}
 const ROW_BY_ID = new Map(ROWS.map((r) => [r.id, r]));
 // The row's default sort goes first in its dropdown.
 function catalogEntry(r, options) {
@@ -69,7 +77,7 @@ function catalogEntry(r, options) {
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.6.0',
+  version: '1.7.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
@@ -89,7 +97,7 @@ const manifest = {
 function languagesFrom(config) {
   const raw = config && typeof config.languages === 'string' ? config.languages : 'ta';
   const picked = raw.split(',').map((s) => s.trim());
-  const codes = EDITIONS.filter((e) => picked.includes(e.code)).map((e) => e.code);
+  const codes = TICK_BOXES.filter((e) => picked.includes(e.code)).map((e) => e.code);
   return codes.length ? codes : ['ta'];
 }
 
@@ -97,7 +105,7 @@ function languagesFrom(config) {
 // that still fits.
 function manifestFor(config) {
   const codes = languagesFrom(config);
-  const names = EDITIONS.filter((e) => codes.includes(e.code)).map((e) => e.name);
+  const names = TICK_BOXES.filter((e) => codes.includes(e.code)).map((e) => e.shortName || e.name);
   const m = JSON.parse(JSON.stringify(manifest));
   m.name = names.length === 1 ? `${names[0]} OTT Catalogs` : `OTT Catalogs (${names.join(', ')})`;
   m.description = `${names.join(', ')} movies and series on streaming services, newest first. Data: TMDB and JustWatch.`;
@@ -196,6 +204,7 @@ const keyFrom = (config) => (config && config.tmdbApiKey ? String(config.tmdbApi
 async function getCatalog(type, id, extra, apiKey) {
   const row = ROW_BY_ID.get(id);
   if (!row || row.type !== type || !apiKey) return { metas: [], partial: false };
+  if (row.dub) return getDubCatalog(row, extra, apiKey);
   const choice = (extra && extra.genre) || row.edition.defaultSort || 'Newest';
   const range = rangeOf(choice);
 
@@ -305,13 +314,70 @@ builder.defineMetaHandler(async ({ type, id, config }) => {
   }
 });
 
-// Loads the first page of every row (default view) plus recent arrivals, so rows open instantly.
+// ---------------------------------------------------------------------------------------------
+// "Dubbed" rows: films originally in other languages (e.g. Malayalam, Hindi) that have an audio
+// track in the row's language (e.g. Tamil) on one of the row's services. The list comes from
+// JustWatch (dubs.js); each film's original language, date and popularity from TMDB. The whole
+// row is built here, sorted, and handed to Stremio a page at a time.
+// ---------------------------------------------------------------------------------------------
+const DUB_PAGE = 40;
+const LANG_NAMES = { ta: 'Tamil', te: 'Telugu', ml: 'Malayalam', hi: 'Hindi', kn: 'Kannada' };
+const dubStats = new Map();
+
+function dubList(row, apiKey) {
+  return cached(`dub-list:${row.id}`, 3 * HOUR, async () => {
+    const e = row.edition;
+    const services = e.services.map((key) => ({ key, jw: SERVICES[key][e.region].jw }));
+    const found = await dubs.films(e.region, e.audio, services);
+    let failed = 0;
+    const metas = await Promise.all(
+      [...found].map(async ([tmdbId, info]) => {
+        try {
+          const d = await tmdb.details('movie', tmdbId, apiKey);
+          if (!e.originalLangs.includes(d.original_language) || !dateOf(d) || dateOf(d) > today()) return null;
+          const m = await toMeta(d, 'movie', apiKey, info.imdbId);
+          const on = e.services.filter((k) => info.services.has(k)).map((k) => SERVICES[k].name);
+          m.description = `${LANG_NAMES[e.audio] || e.audio} audio on ${on.join(', ')}.${m.description ? '\n\n' + m.description : ''}`;
+          m._pop = d.popularity || 0;
+          m._vote = d.vote_count >= 10 ? d.vote_average || 0 : 0;
+          return m;
+        } catch (err) {
+          if (!/ 404 /.test(err.message)) failed++;
+          return null;
+        }
+      })
+    );
+    const list = metas.filter(Boolean);
+    dubStats.set(row.id, { at: new Date().toISOString(), candidates: found.size, kept: list.length, failed });
+    if (failed > found.size * 0.05) throw new Error(`${failed} of ${found.size} TMDB lookups failed for ${row.id}`);
+    return list;
+  });
+}
+
+async function getDubCatalog(row, extra, apiKey) {
+  const choice = (extra && extra.genre) || 'Newest';
+  const range = rangeOf(choice);
+  const list = await within(8000, dubList(row, apiKey), null);
+  if (!list) return { metas: [], partial: true };
+  let items = range ? list.filter((m) => m._date >= range[0] && m._date <= range[1]) : list.slice();
+  const byDate = (a, b) => (a._date < b._date ? 1 : a._date > b._date ? -1 : 0);
+  if (choice === 'Popular' || range) items.sort((a, b) => b._pop - a._pop);
+  else if (choice === 'Top rated') items = items.filter((m) => m._vote > 0).sort((a, b) => b._vote - a._vote);
+  else items.sort(byDate);
+  const skip = Number((extra && extra.skip) || 0);
+  return {
+    metas: items.slice(skip, skip + DUB_PAGE).map(({ _pop, _vote, ...m }) => clean(m)),
+    partial: false,
+  };
+}
+
 // Loads the first page of every row (default view) so rows open instantly. New arrivals are
 // prepared first, and only for rows whose default view uses them (Newest), Indian rows first.
 async function warmUp() {
   if (!ENV_KEY) return;
   const started = Date.now();
-  for (const r of ROWS.filter((r) => (r.edition.defaultSort || 'Newest') === 'Newest')) {
+  for (const r of ROWS.filter((r) => r.dub)) await dubList(r, ENV_KEY).catch((e) => console.error('dubs:', e.message));
+  for (const r of ROWS.filter((r) => !r.dub && (r.edition.defaultSort || 'Newest') === 'Newest')) {
     await recentArrivals(r, ENV_KEY).catch((e) => console.error('arrivals:', e.message));
   }
   const results = await Promise.allSettled(
@@ -322,7 +388,8 @@ async function warmUp() {
 }
 
 module.exports = builder.getInterface();
-module.exports.EDITIONS = EDITIONS;
+module.exports.EDITIONS = TICK_BOXES;
+module.exports.dubStats = (id) => ({ row: dubStats.get(id) || 'not built yet', file: dubs.status() });
 module.exports.warmUp = warmUp;
 module.exports.arrivalStats = (id) => ({ row: arrivalStats.get(id) || 'not checked yet', justwatch: justwatch.status() });
 module.exports.manifestFor = manifestFor;

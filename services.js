@@ -1,5 +1,5 @@
 // Which streaming services and which tick boxes (language + country) the addon offers.
-// Shared by the addon and the GitHub job that collects new arrivals (scripts/fetch-arrivals.js).
+// Shared by the addon and the GitHub jobs that collect data from JustWatch (scripts/).
 
 // Streaming services, per country: TMDB provider IDs (TMDB and JustWatch share these) and
 // JustWatch package short names (for recent arrivals). Some services have several plans.
@@ -37,4 +37,14 @@ const EDITIONS = [
     services: ['netflix', 'prime', 'disney', 'hbomax', 'hulu', 'appletv', 'paramount', 'peacock'] },
 ];
 
-module.exports = { SERVICES, EDITIONS };
+// Extra tick boxes for films dubbed into a language: one movies row of films originally in
+// `originalLangs` that have an `audio` track on any of `services`. Which films have which audio
+// tracks comes from JustWatch (scripts/fetch-dubs.js); Netflix and Sun NXT don't share that, so
+// they can't be included.
+const DUB_EDITIONS = [
+  { code: 'ta-dub', name: 'Tamil dubbed (Malayalam & Hindi)', shortName: 'Tamil dubbed', rowName: 'Tamil Dubbed (Malayalam & Hindi)',
+    audio: 'ta', originalLangs: ['ml', 'hi'], region: 'IN',
+    services: ['prime', 'jiohotstar', 'sonyliv', 'zee5', 'aha'] },
+];
+
+module.exports = { SERVICES, EDITIONS, DUB_EDITIONS };
