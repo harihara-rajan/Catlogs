@@ -109,8 +109,10 @@ Render the addon visits itself every 10 minutes so it stays awake (set `KEEP_AWA
 that), loads every row when it starts and again every 2 hours, and answers from its saved copy
 while refreshing in the background — so rows should open straight away.
 
-**Updates:** after a change is pushed to GitHub, Render needs to redeploy. If it doesn't do so by
-itself, open the service on Render and tap **Manual Deploy → Deploy latest commit**.
+**Updates:** code changes pushed to `main` deploy automatically: `.github/workflows/deploy.yml`
+calls the service's Render deploy hook, stored as the repository secret `RENDER_DEPLOY_HOOK`
+(Render → service → **Settings → Deploy Hook**; GitHub → repo → **Settings → Secrets and
+variables → Actions**). Without the secret, use **Manual Deploy → Deploy latest commit** on Render.
 
 ## Changing things
 

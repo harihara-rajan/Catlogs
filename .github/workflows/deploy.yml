@@ -1,0 +1,33 @@
+# Deploys to Render whenever code changes on main, by calling the service's deploy hook
+# (Render → service → Settings → Deploy Hook), stored as the repository secret RENDER_DEPLOY_HOOK.
+# Changes that don't affect the server (docs, the data-collecting scripts) don't deploy.
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'scripts/**'
+      - '.github/workflows/arrivals.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Start a Render deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::error::Add the Render deploy hook as the repository secret RENDER_DEPLOY_HOOK"
+            exit 1
+          fi
+          curl -fsS -X POST "$HOOK" > /dev/null
+          echo "Render deploy started for ${GITHUB_SHA::7}"
