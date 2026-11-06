@@ -1,23 +1,14 @@
 const A = 'https://tamil-ott-catalogs.onrender.com';
-const CM = 'https://v3-cinemeta.strem.io/meta';
+const CM = 'https://v3-cinemeta.strem.io';
 (async () => {
-  const rows = ['ta-new-movie', 'ta-sonyliv-movie', 'ml-new-movie', 'ta-dub-movie'];
-  const seen = new Set(); let n = 0, noCast = 0, noDir = 0, noMeta = 0; const missing = [];
-  for (const id of rows) {
-    const c = await (await fetch(`${A}/catalog/movie/${id}.json`)).json();
-    for (const m of c.metas.slice(0, 15)) {
-      if (seen.has(m.id) || !m.id.startsWith('tt')) continue; seen.add(m.id); n++;
-      const r = await fetch(`${CM}/movie/${m.id}.json`); const j = await r.json().catch(() => ({}));
-      const meta = j.meta;
-      if (!meta || !meta.name) { noMeta++; missing.push(`${m.name} (no Cinemeta entry)`); continue; }
-      const cast = (meta.cast || []).length || (meta.links || []).filter((l) => l.category === 'Cast').length;
-      const dir = (meta.director || []).length || (meta.links || []).filter((l) => l.category === 'Directors').length;
-      if (!cast) noCast++; if (!dir) noDir++;
-      if (!cast || !dir) missing.push(`${m.name} [${m.releaseInfo}] cast:${cast} director:${dir}`);
-    }
+  const c = await (await fetch(`${A}/catalog/movie/ta-prime-movie.json`)).json();
+  const ap = c.metas.find((m) => /all pass/i.test(m.name));
+  console.log('All Pass in Prime Tamil row:', ap ? `${ap.id} ${ap.releaseInfo}` : 'not on page 1');
+  const s = await (await fetch(`${CM}/catalog/movie/top/search=All%20Pass.json`)).json();
+  console.log('Cinemeta search:', (s.metas || []).slice(0, 4).map((m) => `${m.id} ${m.name} ${m.releaseInfo}`).join(' | '));
+  const id = ap ? ap.id : (s.metas[0] || {}).id;
+  if (id) {
+    const m = (await (await fetch(`${CM}/meta/movie/${id}.json`)).json()).meta || {};
+    console.log(id, '-> name', m.name, '| cast', JSON.stringify(m.cast), '| director', JSON.stringify(m.director), '| links', (m.links || []).map((l) => l.category + ':' + l.name).slice(0, 6).join(', '), '| runtime', m.runtime, '| imdbRating', m.imdbRating);
   }
-  console.log(`checked ${n} films: no Cinemeta entry ${noMeta}, no cast ${noCast}, no director ${noDir}`);
-  console.log(missing.slice(0, 15).join('\n'));
-  const ok = await (await fetch(`${CM}/movie/tt15354916.json`)).json(); // Jawan, for comparison
-  console.log('Jawan cast:', (ok.meta.cast || []).slice(0, 3).join(', '), '| director:', (ok.meta.director || []).join(', '));
 })();
