@@ -12,3 +12,8 @@ jobs:
         with:
           node-version: 22
       - run: node probe.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: posters
+          path: poster-*.jpg
+          if-no-files-found: ignore

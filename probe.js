@@ -1,11 +1,22 @@
-const JW = 'https://apis.justwatch.com/graphql';
-const gql = async (query, variables) => (await (await fetch(JW, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Mozilla/5.0' }, body: JSON.stringify({ query, variables }) })).json());
+const A = 'https://tamil-ott-catalogs.onrender.com';
+const j = async (u) => (await fetch(A + u)).json();
 (async () => {
-  const r = await gql(`query { packages(country: US, platform: WEB) { packageId clearName technicalName shortName monetizationTypes } }`);
-  const want = /netflix|amazon prime|prime video|disney|max|hbo|hulu|apple|paramount|peacock/i;
-  for (const p of r.data.packages) if (want.test(p.clearName) && /FLATRATE|ADS|FREE/.test(p.monetizationTypes)) console.log(p.packageId, p.shortName, `"${p.clearName}"`, p.monetizationTypes);
-  // check a day of US Netflix additions works
-  const d = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
-  const n = await gql(`query($d: Date!) { newTitles(country: US, date: $d, first: 1, filter: { packages: ["nfx"] }, pageType: NEW, priceDrops: false) { totalCount } }`, { d });
-  console.log('US netflix new yesterday:', JSON.stringify(n.data || n.errors));
+  console.log('version', (await j('/manifest.json')).version);
+  await new Promise((r) => setTimeout(r, 45000)); // IMDb download + warm-up + some MDBList batches
+  const d = await j('/debug/ratings/movie/tt38097205');
+  console.log('MM2:', d.imdb, '|', d.rottenTomatoes);
+  console.log('IMDb dataset:', JSON.stringify(d.imdbDataset));
+  const m = d.mdblist; console.log('MDBList:', JSON.stringify({ enabled: m.enabled, known: m.known, queued: m.queued, requestsToday: m.requestsToday, paused: m.paused }));
+  console.log('MDBList last response:', JSON.stringify(m.lastResponse));
+  for (const [type, id] of [['movie', 'ta-sonyliv-movie'], ['movie', 'en-us-netflix-movie'], ['series', 'en-us-hbomax-series']]) {
+    const c = await j(`/${encodeURIComponent(JSON.stringify({ languages: 'ta,en-us' }))}/catalog/${type}/${id}.json`);
+    const badged = c.metas.filter((x) => (x.poster || '').includes('/poster/'));
+    console.log(`\n${id}: ${c.metas.length} items, ${badged.length} badged`);
+    for (const x of c.metas.slice(0, 4)) console.log('  ', x.name, '|', (x.description || '').split('\n')[0].slice(0, 60), '|', (x.poster || '').replace(A, ''));
+    if (badged[0]) {
+      const t0 = Date.now(); const r = await fetch(badged[0].poster); const b = await r.arrayBuffer();
+      console.log(`  poster: ${r.status} ${r.headers.get('content-type')} ${b.byteLength} bytes in ${Date.now() - t0}ms`);
+      require('fs').writeFileSync(`poster-${id}.jpg`, Buffer.from(b));
+    }
+  }
 })();
