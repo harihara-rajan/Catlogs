@@ -1,6 +1,6 @@
 {
   "name": "tamil-ott-catalogs",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Stremio catalog addon: Tamil, Malayalam and Hindi movies and series on Indian streaming services",
   "main": "addon.js",
   "scripts": {

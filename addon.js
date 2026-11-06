@@ -87,7 +87,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.0.0',
+  version: '2.0.1',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -217,8 +217,8 @@ const keyFrom = (config) => (config && config.tmdbApiKey ? String(config.tmdbApi
 const daysSince = (d) => Math.max(0, Math.round((Date.parse(today()) - Date.parse(d)) / (24 * HOUR)));
 
 // Marks titles that arrived on this row's service in the last 7 days (m._newDays) for a "NEW"
-// ribbon. Titles seen only on a "bulk" day (JustWatch re-listing a catalogue) count only if
-// released in the last two years. If the arrivals file isn't available, nothing is marked.
+// ribbon, if released in the two years before (older ones are usually JustWatch re-listing a
+// catalogue). If the arrivals file isn't available, nothing is marked.
 async function markNew(row, metas) {
   if (!row.service) return metas;
   try {
@@ -227,7 +227,7 @@ async function markNew(row, metas) {
     for (const m of metas) {
       const x = found.get(m._tmdb);
       if (!x || x.added < since) continue;
-      if (x.bulk && m._date < new Date(Date.parse(x.added) - 730 * 24 * HOUR).toISOString().slice(0, 10)) continue;
+      if (m._date < new Date(Date.parse(x.added) - 730 * 24 * HOUR).toISOString().slice(0, 10)) continue; // re-listed old title
       m._newDays = daysSince(x.added);
     }
   } catch {
@@ -447,10 +447,10 @@ function weekList(row, apiKey) {
           const d = await tmdb.details(row.type, tmdbId, apiKey);
           const released = dateOf(d);
           if (d.original_language !== e.lang || !released || released > today()) return null;
-          if (x.bulk) {
-            const twoYearsBefore = new Date(Date.parse(x.added) - 730 * 24 * HOUR).toISOString().slice(0, 10);
-            if (released < twoYearsBefore) return null;
-          }
+          // JustWatch sometimes re-lists titles that have been on a service for years; only count
+          // titles released in the two years before they turned up.
+          const twoYearsBefore = new Date(Date.parse(x.added) - 730 * 24 * HOUR).toISOString().slice(0, 10);
+          if (released < twoYearsBefore) return null;
           const m = await toMeta(d, row.type, apiKey, x.imdbId);
           const keys = e.services.filter((k) => x.services.has(k));
           m.description = `New on ${keys.map((k) => SERVICES[k].name).join(', ')} · ${shortDate(x.added)}${m.description ? '\n\n' + m.description : ''}`;
