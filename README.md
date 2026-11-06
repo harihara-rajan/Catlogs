@@ -26,11 +26,14 @@ details and episode lists come from Stremio's built-in metadata, and whatever st
 already have installed handle playback. It doesn't touch the services themselves.
 
 **Where the "what's on where" data comes from:** the full list comes from TMDB, which copies it
-from JustWatch roughly daily. To catch new arrivals sooner, the addon also reads JustWatch's own
-"new on <service>" lists for the last 7 days and slots any Tamil title TMDB hasn't picked up yet
-into its release-date position. So a film appears once **JustWatch** lists it on the service —
-usually within hours to a day of it going live. (JustWatch's API is unofficial; if it ever
-fails, the addon carries on with TMDB alone.)
+from JustWatch roughly daily. To catch new arrivals sooner, a GitHub Actions job
+(`.github/workflows/arrivals.yml`, every 30 minutes) collects JustWatch's "new on <service>" lists
+for the last 7 days and publishes them as `arrivals.json` on the repo's `data` branch; the addon
+reads that file and slots any title TMDB hasn't picked up yet into its release-date position.
+(The job runs on GitHub because JustWatch rate-limits Render's shared addresses. GitHub pauses
+scheduled jobs in repos with no activity for 60 days; if new arrivals stop, re-enable it under
+**Actions → new-arrivals**.) JustWatch's API is unofficial; if it fails, the addon carries on with
+TMDB alone.
 
 ---
 
@@ -118,5 +121,7 @@ itself, open the service on Render and tap **Manual Deploy → Deploy latest com
 - `configure.js` — the install page
 - `imdb-ratings.js`, `mdblist.js` — IMDb and Rotten Tomatoes ratings
 - `poster.js` — posters with rating badges
-- `justwatch.js` — recent arrivals from JustWatch
+- `justwatch.js` — reads the new-arrivals file
+- `services.js` — services per country and the tick boxes
+- `scripts/fetch-arrivals.js` — the GitHub job that collects new arrivals from JustWatch
 - `cache.js` — in-memory cache and request limiter

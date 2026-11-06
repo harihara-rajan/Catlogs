@@ -1,0 +1,40 @@
+// Which streaming services and which tick boxes (language + country) the addon offers.
+// Shared by the addon and the GitHub job that collects new arrivals (scripts/fetch-arrivals.js).
+
+// Streaming services, per country: TMDB provider IDs (TMDB and JustWatch share these) and
+// JustWatch package short names (for recent arrivals). Some services have several plans.
+const SERVICES = {
+  prime:       { name: 'Prime Video',    IN: { ids: [119], jw: ['prv'] },  US: { ids: [9], jw: ['amp'] } },
+  aha:         { name: 'aha',            IN: { ids: [532], jw: ['aha'] } },
+  netflix:     { name: 'Netflix',        IN: { ids: [8], jw: ['nfx'] },    US: { ids: [8, 1796], jw: ['nfx', 'nfa'] } },
+  sonyliv:     { name: 'SonyLIV',        IN: { ids: [237], jw: ['snl'] } },
+  sunnxt:      { name: 'Sun NXT',        IN: { ids: [309], jw: ['snx'] } },
+  jiohotstar:  { name: 'JioHotstar',     IN: { ids: [2336], jw: ['jhs'] } },
+  zee5:        { name: 'ZEE5',           IN: { ids: [232], jw: ['zee'] } },
+  manoramamax: { name: 'ManoramaMAX',    IN: { ids: [482], jw: ['mrx'] } },
+  appletv:     { name: 'Apple TV',       IN: { ids: [350], jw: ['atp'] },  US: { ids: [350], jw: ['atp'] } },
+  lionsgate:   { name: 'Lionsgate Play', IN: { ids: [561], jw: ['lgp'] } },
+  disney:      { name: 'Disney+',        US: { ids: [337], jw: ['dnp'] } },
+  hbomax:      { name: 'HBO Max',        US: { ids: [1899], jw: ['mxx'] } },
+  hulu:        { name: 'Hulu',           US: { ids: [15], jw: ['hlu'] } },
+  paramount:   { name: 'Paramount+',     US: { ids: [2303, 2616], jw: ['ppp', 'ppe'] } },
+  peacock:     { name: 'Peacock',        US: { ids: [386, 387], jw: ['pct', 'pcp'] } },
+};
+
+// The tick boxes on the install page, in the order their rows appear. `lang` = TMDB original
+// language, `region` = country whose streaming catalogues are used, `defaultSort` = how rows are
+// ordered when nothing is picked in the dropdown (Newest if not set).
+const EDITIONS = [
+  { code: 'ta', name: 'Tamil', lang: 'ta', region: 'IN', types: ['movie', 'series'],
+    services: ['prime', 'aha', 'netflix', 'sonyliv', 'sunnxt', 'jiohotstar', 'zee5'] },
+  { code: 'ml', name: 'Malayalam', lang: 'ml', region: 'IN', types: ['movie'],
+    services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5', 'manoramamax'] },
+  { code: 'hi', name: 'Hindi', lang: 'hi', region: 'IN', types: ['movie', 'series'],
+    services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5'] },
+  { code: 'en-in', name: 'English (India)', rowLabel: 'English (IN)', lang: 'en', region: 'IN', types: ['movie', 'series'], defaultSort: 'Popular',
+    services: ['netflix', 'prime', 'jiohotstar', 'appletv', 'sonyliv', 'lionsgate'] },
+  { code: 'en-us', name: 'English (US)', rowLabel: 'English (US)', lang: 'en', region: 'US', types: ['movie', 'series'], defaultSort: 'Popular',
+    services: ['netflix', 'prime', 'disney', 'hbomax', 'hulu', 'appletv', 'paramount', 'peacock'] },
+];
+
+module.exports = { SERVICES, EDITIONS };
