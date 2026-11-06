@@ -133,3 +133,11 @@ itself, open the service on Render and tap **Manual Deploy → Deploy latest com
 - `scripts/fetch-arrivals.js`, `scripts/fetch-dubs.js` — the GitHub job that collects new arrivals and dubbed audio tracks from JustWatch
 - `dubs.js` — reads the dubbed-audio file
 - `cache.js` — in-memory cache and request limiter
+
+## To do
+
+- **Netflix in the Tamil dubbed row.** Netflix doesn't share audio languages with JustWatch, so
+  Netflix dubs (e.g. Jawan, Animal) are missing. Possible source: the uNoGS API on RapidAPI
+  (Netflix catalogues per country with audio/subtitle languages; free "Basic" plan, limits to be
+  confirmed). Would need a RapidAPI key on Render as `UNOGS_API_KEY`, a daily search for Netflix
+  India films with Tamil audio, and merging those into `ta-dub-movie`. Don't scrape netflix.com.
