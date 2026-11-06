@@ -83,7 +83,7 @@ function catalogEntry(r, options) {
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.8.1',
+  version: '1.9.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
@@ -264,18 +264,20 @@ const BASE_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '
 
 // Adds IMDb and Rotten Tomatoes ratings: a badge on the poster, a line at the top of the
 // description, and Stremio's imdbRating field. Titles without a known score are queued for lookup.
-function withRatings(meta) {
+// meta._services (rows that mix services) adds a service tag to the poster.
+function withRatings({ _services, ...meta }) {
   if (!/^tt\d+$/.test(meta.id)) return meta;
   const imdb = imdbRatings.get(meta.id);
   const rt = mdblist.rt(meta.type, meta.id);
   const rtScore = typeof rt === 'number' ? rt : null;
-  if (imdb == null && rtScore == null) return meta;
+  const services = _services || [];
+  if (imdb == null && rtScore == null && !services.length) return meta;
   const line = [imdb != null && `IMDb ${imdb.toFixed(1)}`, rtScore != null && `Rotten Tomatoes ${rtScore}%`].filter(Boolean).join(' · ');
   return {
     ...meta,
     imdbRating: imdb != null ? imdb.toFixed(1) : undefined,
-    description: meta.description ? `${line}\n\n${meta.description}` : line,
-    poster: poster.posterUrl(BASE_URL, meta.id, meta.poster, imdb, rtScore),
+    description: !line ? meta.description : meta.description ? `${line}\n\n${meta.description}` : line,
+    poster: poster.posterUrl(BASE_URL, meta.id, meta.poster, imdb, rtScore, services),
   };
 }
 
@@ -345,8 +347,9 @@ function dubList(row, apiKey) {
           const d = await tmdb.details('movie', tmdbId, apiKey);
           if (!e.originalLangs.includes(d.original_language) || !dateOf(d) || dateOf(d) > today()) return null;
           const m = await toMeta(d, 'movie', apiKey, info.imdbId);
-          const on = e.services.filter((k) => info.services.has(k)).map((k) => SERVICES[k].name);
-          m.description = `${LANG_NAMES[e.audio] || e.audio} audio on ${on.join(', ')}.${m.description ? '\n\n' + m.description : ''}`;
+          const keys = e.services.filter((k) => info.services.has(k));
+          m.description = `${LANG_NAMES[e.audio] || e.audio} audio on ${keys.map((k) => SERVICES[k].name).join(', ')}.${m.description ? '\n\n' + m.description : ''}`;
+          m._services = keys;
           m._pop = d.popularity || 0;
           m._vote = d.vote_count >= 10 ? d.vote_average || 0 : 0;
           return m;
@@ -407,8 +410,9 @@ function weekList(row, apiKey) {
             if (released < twoYearsBefore) return null;
           }
           const m = await toMeta(d, row.type, apiKey, x.imdbId);
-          const on = e.services.filter((k) => x.services.has(k)).map((k) => SERVICES[k].name);
-          m.description = `New on ${on.join(', ')} · ${shortDate(x.added)}${m.description ? '\n\n' + m.description : ''}`;
+          const keys = e.services.filter((k) => x.services.has(k));
+          m.description = `New on ${keys.map((k) => SERVICES[k].name).join(', ')} · ${shortDate(x.added)}${m.description ? '\n\n' + m.description : ''}`;
+          m._services = keys;
           m._added = x.added;
           m._pop = d.popularity || 0;
           return m;

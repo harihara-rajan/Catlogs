@@ -1,5 +1,5 @@
 // Posters with rating badges: the TMDB poster with an IMDb / Rotten Tomatoes strip drawn along
-// the bottom. Text is turned into vector shapes from the bundled font (assets/Inter-Bold.otf), so
+// the bottom, and (in rows that mix services) a service tag in the top-left corner. Text is turned into vector shapes from the bundled font (assets/Inter-Bold.otf), so
 // it doesn't depend on fonts being installed on the server.
 //
 // The ratings are part of the poster's address (/poster/tt123/78-92/abc.jpg), so a poster never
@@ -40,8 +40,38 @@ function tomato(x, y, size, fresh) {
   </g>`;
 }
 
-// SVG overlay (same size as the poster) with the ratings strip at the bottom.
-function overlay(w, h, imdb, rt) {
+// Service tags: the service's name as text in a colour close to its brand (no logos).
+const TAGS = {
+  prime:       { label: 'Prime',       bg: '#00A8E1', fg: '#fff' },
+  netflix:     { label: 'Netflix',     bg: '#E50914', fg: '#fff' },
+  jiohotstar:  { label: 'JioHotstar',  bg: '#1F3BC9', fg: '#fff' },
+  sonyliv:     { label: 'SonyLIV',     bg: '#262626', fg: '#F2C14E' },
+  zee5:        { label: 'ZEE5',        bg: '#8230C6', fg: '#fff' },
+  aha:         { label: 'aha',         bg: '#FF6A00', fg: '#fff' },
+  sunnxt:      { label: 'Sun NXT',     bg: '#F39200', fg: '#1a1a1a' },
+  manoramamax: { label: 'ManoramaMAX', bg: '#D71920', fg: '#fff' },
+  appletv:     { label: 'Apple TV',    bg: '#111',    fg: '#fff' },
+  lionsgate:   { label: 'Lionsgate',   bg: '#1F1F1F', fg: '#fff' },
+};
+
+// Tag in the top-left corner: first service, plus "+N" if it's on more.
+function serviceTag(k, services) {
+  const known = services.filter((s) => TAGS[s]);
+  if (!known.length) return '';
+  const tag = TAGS[known[0]];
+  const label = known.length > 1 ? `${tag.label} +${known.length - 1}` : tag.label;
+  const size = 19.5 * k;
+  const h = 37 * k;
+  const w = textWidth(label, size) + 24 * k;
+  const x = 9 * k;
+  const y = 9 * k;
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${8 * k}" fill="${tag.bg}"/>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${8 * k}" fill="none" stroke="#000" stroke-opacity="0.25" stroke-width="${1.5 * k}"/>
+    ${textPath(label, x + 12 * k, y + h / 2 + size * 0.36, size, tag.fg)}`;
+}
+
+// SVG overlay (same size as the poster): ratings strip at the bottom, service tag at the top.
+function overlay(w, h, imdb, rt, services = []) {
   const k = w / 342; // designed at 342 px wide
   const pad = 9 * k;
   const stripH = 48 * k;
@@ -72,21 +102,25 @@ function overlay(w, h, imdb, rt) {
     x += textWidth(t, num) + 4 * k;
   }
   const stripW = x - pad + 8 * k;
+  const strip = imdb != null || rt != null
+    ? `<rect x="${pad}" y="${y0}" width="${stripW}" height="${stripH}" rx="${stripH / 2}" fill="#000" fill-opacity="0.78"/>
+      ${parts.join('\n')}`
+    : '';
   return Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
-      <rect x="${pad}" y="${y0}" width="${stripW}" height="${stripH}" rx="${stripH / 2}" fill="#000" fill-opacity="0.78"/>
-      ${parts.join('\n')}
+      ${strip}
+      ${serviceTag(k, services)}
     </svg>`
   );
 }
 
-async function render(file, imdb, rt) {
+async function render(file, imdb, rt, services) {
   const res = await fetch(`${TMDB_IMG}/${SIZE}/${file}`, { signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error(`poster ${res.status}`);
   const img = sharp(Buffer.from(await res.arrayBuffer()));
   const { width, height } = await img.metadata();
   return img
-    .composite([{ input: overlay(width, height, imdb, rt), top: 0, left: 0 }])
+    .composite([{ input: overlay(width, height, imdb, rt, services), top: 0, left: 0 }])
     .jpeg({ quality: 82, progressive: true })
     .toBuffer();
 }
@@ -98,24 +132,37 @@ function parseRatings(s) {
   return { imdb: m[1] === 'n' ? null : Number(m[1]) / 10, rt: m[2] === 'n' ? null : Number(m[2]) };
 }
 
-// Address of the badged poster for a meta, or the plain poster if there's nothing to show.
-function posterUrl(baseUrl, tt, tmdbPosterUrl, imdb, rt) {
-  const m = /\/([A-Za-z0-9_-]+\.(?:jpg|png))$/.exec(tmdbPosterUrl || '');
-  if (!baseUrl || !m || !/^tt\d+$/.test(tt || '') || (imdb == null && rt == null)) return tmdbPosterUrl;
-  const code = `${imdb == null ? 'n' : Math.round(imdb * 10)}-${rt == null ? 'n' : rt}`;
-  return `${baseUrl}/poster/${tt}/${code}/${m[1]}`;
+// "prime+zee5" -> ['prime', 'zee5'] (known services only); "-" means none.
+function parseServices(s) {
+  if (!s || s === '-') return [];
+  if (!/^[a-z0-9]+(\+[a-z0-9]+)*$/.test(s)) return null;
+  const list = s.split('+');
+  return list.every((x) => TAGS[x]) ? list : null;
 }
 
-// Express handler for /poster/:tt/:ratings/:file
+// Address of the badged poster for a meta, or the plain poster if there's nothing to show.
+// services: service keys to tag the poster with (only for rows that mix services).
+function posterUrl(baseUrl, tt, tmdbPosterUrl, imdb, rt, services = []) {
+  const m = /\/([A-Za-z0-9_-]+\.(?:jpg|png))$/.exec(tmdbPosterUrl || '');
+  const tags = services.filter((x) => TAGS[x]);
+  if (!baseUrl || !m || !/^tt\d+$/.test(tt || '') || (imdb == null && rt == null && !tags.length)) return tmdbPosterUrl;
+  const code = `${imdb == null ? 'n' : Math.round(imdb * 10)}-${rt == null ? 'n' : rt}`;
+  return tags.length
+    ? `${baseUrl}/poster/${tt}/${code}/${tags.join('+')}/${m[1]}`
+    : `${baseUrl}/poster/${tt}/${code}/${m[1]}`;
+}
+
+// Express handler for /poster/:tt/:ratings/:file and /poster/:tt/:ratings/:services/:file
 async function handler(req, res) {
   const { tt, ratings, file } = req.params;
   const r = parseRatings(ratings);
-  if (!/^tt\d+$/.test(tt) || !r || !/^[A-Za-z0-9_-]+\.(jpg|png)$/.test(file)) return res.status(404).end();
-  const key = `${ratings}/${file}`;
+  const services = parseServices(req.params.services);
+  if (!/^tt\d+$/.test(tt) || !r || !services || !/^[A-Za-z0-9_-]+\.(jpg|png)$/.test(file)) return res.status(404).end();
+  const key = `${ratings}/${services.join('+') || '-'}/${file}`;
   try {
     let buf = made.get(key);
     if (!buf) {
-      buf = await rendering(() => render(file, r.imdb, r.rt));
+      buf = await rendering(() => render(file, r.imdb, r.rt, services));
       made.set(key, buf);
       if (made.size > MAX) made.delete(made.keys().next().value);
     }

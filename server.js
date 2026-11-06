@@ -51,6 +51,7 @@ app.get('/:config/configure', sendConfigure);
 
 // Posters with rating badges.
 app.get('/poster/:tt/:ratings/:file', poster.handler);
+app.get('/poster/:tt/:ratings/:services/:file', poster.handler);
 
 // What the server knows about a title's ratings, and the state of the rating sources.
 app.get('/debug/ratings/:type/:tt', (req, res) => {
