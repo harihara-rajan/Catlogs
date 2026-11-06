@@ -50,7 +50,7 @@ const ENV_KEY = process.env.TMDB_API_KEY || '';
 // "New This Week" rows at the very top).
 const ROWS = EDITIONS.flatMap((e) => [
   ...(e.newThisWeek
-    ? e.types.map((type) => ({ id: `${e.code}-new-${type}`, type, name: `🆕 New This Week · ${e.rowLabel || e.name}`, edition: e, newWeek: true }))
+    ? e.types.map((type) => ({ id: `${e.code}-new-${type}`, type, name: `New This Week · ${e.rowLabel || e.name}`, edition: e, newWeek: true }))
     : []),
   ...e.services.flatMap((key) =>
     e.types.map((type) => ({
@@ -87,7 +87,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.3.1',
+  version: '2.3.2',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
