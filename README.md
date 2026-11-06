@@ -60,10 +60,11 @@ TMDB alone.
 - Original icon and background (`assets.js`, drawn at start-up: `/logo.png`, `/background.jpg`).
 - Row names lead with the language: "Tamil · Prime Video", "New This Week · Tamil",
   "🎙️ Tamil Dubbed · Malayalam & Hindi".
-- **New This Week** rows use posters with the service tag and a "NEW · 2d" ribbon. (Wide "hero"
+- **New This Week** rows use posters with a full-width band in the service's colour along the
+  top and a big yellow "NEW" chip; both are sized to stay readable on a TV. (Wide "hero"
   banners are available in `banner.js` but switched off.)
 - In the service rows, titles that arrived on that service in the last 7 days get a
-  "NEW · 2d" ribbon on the poster.
+  "NEW" chip on the poster (the date is in the description).
 
 ## Ratings on posters
 
@@ -152,7 +153,7 @@ variables → Actions**). Without the secret, use **Manual Deploy → Deploy lat
 - `server.js` — HTTP server (port `PORT`, default 7000): manifests, install page, warm-up, keep-awake
 - `configure.js` — the install page
 - `imdb-ratings.js`, `mdblist.js` — IMDb and Rotten Tomatoes ratings
-- `poster.js` — posters with rating badges, service tags and NEW ribbons
+- `poster.js` — posters with rating badges, service bands and NEW chips
 - `banner.js` — wide banners for the New This Week rows
 - `assets.js` — the addon's icon and background
 - `justwatch.js` — reads the new-arrivals file

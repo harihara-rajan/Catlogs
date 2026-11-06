@@ -1,5 +1,5 @@
 // Posters with badges, drawn on the TMDB poster: an IMDb (/ Rotten Tomatoes) strip along the
-// bottom, a service tag in the top-right corner (rows that mix services), and a "NEW · 2d" ribbon
+// bottom, a full-width service band along the top (rows that mix services), and a big "NEW" chip
 // for recent arrivals. Text is turned into vector shapes from the bundled font
 // (assets/Inter-Bold.otf), so it doesn't depend on fonts being installed on the server.
 //
@@ -17,7 +17,7 @@ sharp.cache(false);
 
 const font = opentype.loadSync(path.join(__dirname, 'assets', 'Inter-Bold.otf'));
 const TMDB_IMG = process.env.TMDB_IMG_BASE || 'https://image.tmdb.org/t/p';
-const DESIGN = 6; // bump when the badge drawing changes (2: tag right; 3: NEW; 4: sharper; 5: bigger; 6: NEW under tag)
+const DESIGN = 7; // bump when the badge drawing changes (2: tag right; 3: NEW; 4: sharper; 5: bigger; 6: NEW under tag; 7: full-width service band, big NEW)
 const SIZE = 'w500'; // big enough to stay sharp on a TV
 const rendering = limiter(2);
 
@@ -56,38 +56,42 @@ const TAGS = {
   lionsgate:   { label: 'Lionsgate',   bg: '#1F1F1F', fg: '#fff' },
 };
 
-// Tag in the top-right corner (Stremio puts its own library tick top-left): first service, plus
-// "+N" if it's on more.
-function serviceTag(k, w, services) {
+// Service band across the top of the poster (rows that mix services), in the service's colour:
+// first service, plus "+N" if it's on more. Full width and tall so it stays readable when a TV
+// shows the poster only ~200 px wide.
+function serviceBand(w, h, services) {
   const known = services.filter((s) => TAGS[s]);
-  if (!known.length) return '';
+  if (!known.length) return { svg: '', height: 0 };
   const tag = TAGS[known[0]];
   const label = known.length > 1 ? `${tag.label} +${known.length - 1}` : tag.label;
-  const size = 19.5 * k;
-  const h = 37 * k;
-  const tw = textWidth(label, size) + 24 * k;
-  const x = w - 9 * k - tw;
-  const y = 9 * k;
-  return `<rect x="${x}" y="${y}" width="${tw}" height="${h}" rx="${8 * k}" fill="${tag.bg}"/>
-    <rect x="${x}" y="${y}" width="${tw}" height="${h}" rx="${8 * k}" fill="none" stroke="#000" stroke-opacity="0.25" stroke-width="${1.5 * k}"/>
-    ${textPath(label, x + 12 * k, y + h / 2 + size * 0.36, size, tag.fg)}`;
+  const bh = Math.round(h * 0.13);
+  let size = bh * 0.64;
+  while (textWidth(label, size) > w * 0.9) size -= 1;
+  const tx = (w - textWidth(label, size)) / 2;
+  return {
+    height: bh,
+    svg: `<rect x="0" y="0" width="${w}" height="${bh}" fill="${tag.bg}"/>
+    <rect x="0" y="${bh}" width="${w}" height="${Math.max(2, h * 0.004)}" fill="#000" fill-opacity="0.35"/>
+    ${textPath(label, tx, bh / 2 + size * 0.36, size, tag.fg)}`,
+  };
 }
 
-// "NEW · today" / "NEW · 3d"
+// "NEW · today" / "NEW · 3d" (used in descriptions and banners)
 const newLabel = (days) => `NEW · ${days === 0 ? 'today' : `${days}d`}`;
 
-// White "NEW · 2d" chip in the top-right corner; when a service tag is there, just below it.
-function newRibbon(k, w, days, belowTag) {
+// Big yellow "NEW" chip in the top-right corner, below the service band if there is one.
+function newChip(w, h, days, top) {
   if (days == null) return '';
-  const label = newLabel(days);
-  const size = 18 * k;
-  const h = 35 * k;
-  const tw = textWidth(label, size) + 22 * k;
-  const x = w - 9 * k - tw;
-  const y = belowTag ? 9 * k + 37 * k + 6 * k : 9 * k; // service tag is 37k tall
-  return `<rect x="${x}" y="${y}" width="${tw}" height="${h}" rx="${8 * k}" fill="#fff"/>
-    <rect x="${x}" y="${y}" width="${tw}" height="${h}" rx="${8 * k}" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="${1.5 * k}"/>
-    ${textPath(label, x + 11 * k, y + h / 2 + size * 0.36, size, '#15121c')}`;
+  const label = 'NEW';
+  const size = w * 0.1;
+  const ch = size * 1.5;
+  const cw = textWidth(label, size) + size * 0.9;
+  const m = w * 0.03;
+  const x = w - m - cw;
+  const y = top + m;
+  return `<rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="${ch * 0.22}" fill="#FFD60A"/>
+    <rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="${ch * 0.22}" fill="none" stroke="#000" stroke-opacity="0.45" stroke-width="${w * 0.005}"/>
+    ${textPath(label, x + size * 0.45, y + ch / 2 + size * 0.36, size, '#111')}`;
 }
 
 // SVG overlay (same size as the poster): ratings strip at the bottom, service tag at the top.
@@ -99,6 +103,7 @@ function overlay(w, h, imdb, rt, services = [], newDays = null) {
   const midY = y0 + stripH / 2;
   const num = 24 * k; // number size
   const parts = [];
+  const band = serviceBand(w, h, services);
   let x = pad + 12 * k;
 
   if (imdb != null) {
@@ -129,8 +134,8 @@ function overlay(w, h, imdb, rt, services = [], newDays = null) {
   return Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
       ${strip}
-      ${serviceTag(k, w, services)}
-      ${newRibbon(k, w, newDays, services.length > 0)}
+      ${band.svg}
+      ${newChip(w, h, newDays, band.height)}
     </svg>`
   );
 }
