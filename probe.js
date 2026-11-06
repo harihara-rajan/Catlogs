@@ -1,22 +1,14 @@
 const A = 'https://tamil-ott-catalogs.onrender.com';
 const j = async (u) => (await fetch(A + u)).json();
 (async () => {
-  console.log('version', (await j('/manifest.json')).version);
-  await new Promise((r) => setTimeout(r, 45000)); // IMDb download + warm-up + some MDBList batches
-  const d = await j('/debug/ratings/movie/tt38097205');
-  console.log('MM2:', d.imdb, '|', d.rottenTomatoes);
-  console.log('IMDb dataset:', JSON.stringify(d.imdbDataset));
-  const m = d.mdblist; console.log('MDBList:', JSON.stringify({ enabled: m.enabled, known: m.known, queued: m.queued, requestsToday: m.requestsToday, paused: m.paused }));
-  console.log('MDBList last response:', JSON.stringify(m.lastResponse));
-  for (const [type, id] of [['movie', 'ta-sonyliv-movie'], ['movie', 'en-us-netflix-movie'], ['series', 'en-us-hbomax-series']]) {
-    const c = await j(`/${encodeURIComponent(JSON.stringify({ languages: 'ta,en-us' }))}/catalog/${type}/${id}.json`);
-    const badged = c.metas.filter((x) => (x.poster || '').includes('/poster/'));
-    console.log(`\n${id}: ${c.metas.length} items, ${badged.length} badged`);
-    for (const x of c.metas.slice(0, 4)) console.log('  ', x.name, '|', (x.description || '').split('\n')[0].slice(0, 60), '|', (x.poster || '').replace(A, ''));
-    if (badged[0]) {
-      const t0 = Date.now(); const r = await fetch(badged[0].poster); const b = await r.arrayBuffer();
-      console.log(`  poster: ${r.status} ${r.headers.get('content-type')} ${b.byteLength} bytes in ${Date.now() - t0}ms`);
-      require('fs').writeFileSync(`poster-${id}.jpg`, Buffer.from(b));
-    }
-  }
+  const titles = [['series', 'tt3581920', 'The Last of Us'], ['series', 'tt0108778', 'Friends'], ['series', 'tt2356777', 'True Detective'], ['series', 'tt0903747', 'Breaking Bad'],
+                  ['movie', 'tt1745960', 'Top Gun Maverick'], ['movie', 'tt36931126', 'Immortal (Tamil)'], ['movie', 'tt15354916', 'Jawan'], ['movie', 'tt0111161', 'Shawshank']];
+  let st;
+  for (const [t, id, name] of titles) { const d = await j(`/debug/ratings/${t}/${id}`); st = d.mdblist; console.log(name.padEnd(18), 'IMDb', d.imdb, '| RT', d.rottenTomatoes); }
+  console.log('MDBList:', JSON.stringify({ known: st.known, queued: st.queued, requestsToday: st.requestsToday, paused: st.paused }));
+  console.log('last:', JSON.stringify(st.lastResponse).slice(0, 700));
+  // Ask MDBList's public item page format? Not possible without key. Wait for queue then recheck shows.
+  await new Promise((r) => setTimeout(r, 40000));
+  for (const [t, id, name] of titles.slice(0, 4)) { const d = await j(`/debug/ratings/${t}/${id}`); console.log('after 40s:', name.padEnd(18), '| RT', d.rottenTomatoes); }
+  const d = await j('/debug/ratings/movie/tt0111161'); console.log('last:', JSON.stringify(d.mdblist.lastResponse).slice(0, 900));
 })();
