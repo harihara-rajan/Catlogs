@@ -1,14 +1,12 @@
-const urls = [
-  'https://tamil-ott-catalogs.onrender.com/poster/tt38097205/63-n/sonyliv/m58tEBZ2IKAfSeBdnZhTDmE0Nx9.jpg?v=6&n=0',
-  'https://tamil-ott-catalogs.onrender.com/poster/tt33029123/78-n/zee5/9Vgmpa0tcCzkbXf9AY0zXrai1oi.jpg?v=6&n=0',
-  'https://image.tmdb.org/t/p/w500/m58tEBZ2IKAfSeBdnZhTDmE0Nx9.jpg',
-];
+const A = 'https://tamil-ott-catalogs.onrender.com';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
-  let i = 0;
-  for (const u of urls) {
-    const b = Buffer.from(await (await fetch(u)).arrayBuffer());
-    const s = b.toString('base64');
-    for (let j = 0; j < s.length; j += 8000) console.log(`IMG${i} ${s.slice(j, j + 8000)}`);
-    i++;
+  for (let i = 0; i < 40; i++) {
+    try { const m = await (await fetch(`${A}/manifest.json?x=${Date.now()}`)).json(); if (m.version === '2.3.3') break; } catch (e) {}
+    await sleep(15000);
   }
+  const c = await (await fetch(`${A}/catalog/movie/ta-new-movie.json?x=1`)).json();
+  const u = c.metas[0].poster; console.log(c.metas[0].name, u);
+  const r = await fetch(u); const b = Buffer.from(await r.arrayBuffer()); console.log(r.status, b.length);
+  const s = b.toString('base64'); for (let j = 0; j < s.length; j += 8000) console.log(`IMG0 ${s.slice(j, j + 8000)}`);
 })();
