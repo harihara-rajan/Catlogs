@@ -1,17 +1,15 @@
 const JW = 'https://apis.justwatch.com/graphql';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function q(name, query, variables = {}) {
+async function q(name, query, variables = {}, n = 3000) {
   const r = await fetch(JW, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Mozilla/5.0' }, body: JSON.stringify({ query, variables }) });
   const t = await r.text();
-  console.log(`\n### ${name} (${r.status})\n${t.slice(0, 2500)}`);
+  console.log(`\n### ${name} (${r.status})\n${t.slice(0, n)}`);
   await sleep(2500);
+  try { return JSON.parse(t); } catch { return null; }
 }
+const PK = '["nfx","prv","jhs","zee","snl","aha","snx","mrx"]';
 (async () => {
-  await q('suggest root', '{ upcoming }');
-  await q('suggest root2', '{ upcomingTitles }');
-  await q('node upcoming', `{ popularTitles(country: IN, first: 1, filter: { searchQuery: "Kantara" }) { edges { node { id upcomingReleases { releaseDate } } } } }`);
-  await q('node upcoming fields', `{ popularTitles(country: IN, first: 1, filter: { searchQuery: "Kantara" }) { edges { node { id upcomingReleases(releaseTypes: [DIGITAL]) { releaseCountDown releaseDate label package { shortName clearName } } } } } }`);
-  await q('newTitles future', `{ newTitles(country: IN, date: "2026-11-14", first: 10, filter: { packages: ["nfx","prv","jhs","zee","snl","aha","snx"] }) { totalCount edges { node { content(country: IN, language: en) { title originalReleaseYear } } } } }`);
-  await q('newTitles pageType', `{ newTitles(country: IN, date: "2026-11-14", first: 10, pageType: UPCOMING, filter: { packages: ["nfx","prv","jhs","zee","snl","aha","snx"] }) { totalCount edges { node { content(country: IN, language: en) { title } } } } }`);
-  await q('newTitles upcoming arg', `{ newTitles(country: IN, date: "2026-11-14", first: 10, upcoming: true) { totalCount } }`);
+  await q('fragments', `{ newTitles(country: IN, date: "2026-11-06", first: 3, pageType: UPCOMING, filter: { packages: ${PK} }) { edges { node { __typename ... on Movie { upcomingReleases { releaseDate releaseType label package { shortName } } } ... on Show { upcomingReleases { releaseDate releaseType label package { shortName } } } ... on Season { upcomingReleases { releaseDate releaseType label package { shortName } } } } } } }`);
+  await q('edge fields', `{ newTitles(country: IN, date: "2026-11-06", first: 3, pageType: UPCOMING, filter: { packages: ${PK} }) { edges { cursor newOffer(platform: WEB) { package { shortName } } node { id } } } }`);
+  await q('date variance', `{ a: newTitles(country: IN, date: "2026-11-06", first: 1, pageType: UPCOMING, filter: { packages: ${PK} }) { totalCount } b: newTitles(country: IN, date: "2026-12-20", first: 1, pageType: UPCOMING, filter: { packages: ${PK} }) { totalCount } c: newTitles(country: IN, date: "2026-11-06", first: 1, pageType: UPCOMING, filter: { packages: ["zee"] }) { totalCount } }`);
 })();
