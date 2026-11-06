@@ -72,7 +72,7 @@ const ALL_CATALOGS = LANGUAGES.flatMap((l) =>
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.3.1',
+  version: '1.3.2',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on Indian streaming services, newest first. Data: TMDB and JustWatch.',
   logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
@@ -159,7 +159,7 @@ const dateOf = (item) => item.release_date || item.first_air_date || '';
 async function toMeta(item, type, apiKey, knownImdb) {
   const imdb = knownImdb || (await tmdb.imdbId(type, item.id, apiKey));
   const date = dateOf(item);
-  return {
+  const meta = {
     // IMDb IDs let Stremio's own metadata and your other addons recognise the title.
     // Titles TMDB has no IMDb ID for fall back to tmdb:<type>:<id> (served by the meta handler below).
     id: imdb || `tmdb:${type}:${item.id}`,
@@ -172,6 +172,10 @@ async function toMeta(item, type, apiKey, knownImdb) {
     _tmdb: String(item.id),
     _date: date,
   };
+  // Tells Stremio which video *is* the movie, so it offers "Mark as watched" and Play straight from
+  // the row (Stremio's own catalogs do the same). Series have episodes instead, so they don't.
+  if (type === 'movie') meta.behaviorHints = { defaultVideoId: meta.id };
+  return meta;
 }
 
 const clean = ({ _tmdb, _date, ...meta }) => meta;
@@ -279,6 +283,7 @@ builder.defineMetaHandler(async ({ type, id, config }) => {
         genres: (d.genres || []).map((g) => g.name),
         runtime: runtime ? `${runtime} min` : undefined,
         website: d.homepage || undefined,
+        behaviorHints: m[1] === 'movie' ? { defaultVideoId: id } : undefined,
       },
       cacheMaxAge: 24 * 3600,
     };
