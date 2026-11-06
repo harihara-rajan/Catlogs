@@ -2,6 +2,9 @@ const express = require('express');
 const { getRouter } = require('stremio-addon-sdk');
 const addonInterface = require('./addon');
 const configurePage = require('./configure');
+const poster = require('./poster');
+const imdbRatings = require('./imdb-ratings');
+const mdblist = require('./mdblist');
 
 const port = Number(process.env.PORT) || 7000;
 const MIN = 60 * 1000;
@@ -46,10 +49,28 @@ app.get('/', (_, res) => res.redirect('/configure'));
 app.get('/configure', sendConfigure);
 app.get('/:config/configure', sendConfigure);
 
+// Posters with rating badges.
+app.get('/poster/:tt/:ratings/:file', poster.handler);
+
+// What the server knows about a title's ratings, and the state of the rating sources.
+app.get('/debug/ratings/:type/:tt', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const rt = mdblist.rt(req.params.type, req.params.tt);
+  res.json({
+    imdb: imdbRatings.get(req.params.tt),
+    rottenTomatoes: rt === undefined ? 'not looked up yet (queued)' : rt === null ? 'no Rotten Tomatoes score' : rt,
+    imdbDataset: imdbRatings.status(),
+    mdblist: mdblist.status(),
+  });
+});
+
 // Catalogs and details: the SDK's own routes.
 app.use(getRouter(addonInterface));
 
 app.listen(port, () => console.log(`addon running: http://127.0.0.1:${port}/configure`));
+
+imdbRatings.start();
+mdblist.start();
 
 // Load every row once at start-up, then again every 2 hours, so rows open instantly.
 setTimeout(() => addonInterface.warmUp().catch((e) => console.error('warm-up failed:', e.message)), 2000);

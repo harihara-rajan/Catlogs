@@ -9,3 +9,5 @@ services:
     envVars:
       - key: TMDB_API_KEY
         sync: false # Render asks for this value when you create the service
+      - key: MDBLIST_API_KEY
+        sync: false # Rotten Tomatoes scores; optional

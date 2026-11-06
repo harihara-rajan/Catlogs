@@ -34,6 +34,22 @@ fails, the addon carries on with TMDB alone.)
 
 ---
 
+## Ratings on posters
+
+Each poster gets a small strip with its **IMDb** rating and **Rotten Tomatoes** critics score
+(🍅 fresh at 60%+, green splat below), and the same line at the top of the description.
+
+- **IMDb**: from IMDb's free daily ratings file (`title.ratings.tsv.gz`, personal/non-commercial
+  use), downloaded at start-up and daily. No key needed.
+- **Rotten Tomatoes**: from [MDBList](https://mdblist.com). Sign in there (Trakt or email), copy
+  your key from **Preferences → API Access**, and add it on Render as the environment variable
+  `MDBLIST_API_KEY`. The free plan allows 1,000 requests a day and each covers 10 titles; the addon
+  stays under 900 a day, looks titles up in the background, and keeps scores for a week. New rows
+  fill in within minutes. Without the key you get IMDb only.
+- Badges are drawn by the server (text from the bundled Inter font, `assets/`) and cached; the
+  ratings are part of the poster address, so a poster is re-made only when a score changes.
+- Check what the server knows about a title: `/debug/ratings/movie/tt1234567`.
+
 ## 1. Get a free TMDB API key (5 min)
 
 1. Make an account at <https://www.themoviedb.org/signup>.
@@ -100,5 +116,7 @@ itself, open the service on Render and tap **Manual Deploy → Deploy latest com
 - `tmdb.js` — TMDB requests with in-memory caching and a limit on parallel requests
 - `server.js` — HTTP server (port `PORT`, default 7000): manifests, install page, warm-up, keep-awake
 - `configure.js` — the install page
+- `imdb-ratings.js`, `mdblist.js` — IMDb and Rotten Tomatoes ratings
+- `poster.js` — posters with rating badges
 - `justwatch.js` — recent arrivals from JustWatch
 - `cache.js` — in-memory cache and request limiter

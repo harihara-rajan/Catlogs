@@ -2,6 +2,9 @@ const { addonBuilder } = require('stremio-addon-sdk');
 const tmdb = require('./tmdb');
 const justwatch = require('./justwatch');
 const { cached, within } = require('./cache');
+const imdbRatings = require('./imdb-ratings');
+const mdblist = require('./mdblist');
+const poster = require('./poster');
 
 // Streaming services, per country: TMDB provider IDs (TMDB and JustWatch share these) and
 // JustWatch package short names (for recent arrivals). Some services have several plans.
@@ -100,7 +103,7 @@ function catalogEntry(r, options) {
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '1.4.1',
+  version: '1.5.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: 'https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg',
@@ -256,9 +259,29 @@ async function getCatalog(type, id, extra, apiKey) {
   return [...listed, ...extra_].sort((a, b) => (a._date < b._date ? 1 : a._date > b._date ? -1 : 0)).map(clean);
 }
 
+// Public address of this server, for badged poster links (Render sets RENDER_EXTERNAL_URL).
+const BASE_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '');
+
+// Adds IMDb and Rotten Tomatoes ratings: a badge on the poster, a line at the top of the
+// description, and Stremio's imdbRating field. Titles without a known score are queued for lookup.
+function withRatings(meta) {
+  if (!/^tt\d+$/.test(meta.id)) return meta;
+  const imdb = imdbRatings.get(meta.id);
+  const rt = mdblist.rt(meta.type, meta.id);
+  const rtScore = typeof rt === 'number' ? rt : null;
+  if (imdb == null && rtScore == null) return meta;
+  const line = [imdb != null && `IMDb ${imdb.toFixed(1)}`, rtScore != null && `Rotten Tomatoes ${rtScore}%`].filter(Boolean).join(' · ');
+  return {
+    ...meta,
+    imdbRating: imdb != null ? imdb.toFixed(1) : undefined,
+    description: meta.description ? `${line}\n\n${meta.description}` : line,
+    poster: poster.posterUrl(BASE_URL, meta.id, meta.poster, imdb, rtScore),
+  };
+}
+
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
   try {
-    const metas = await getCatalog(type, id, extra, keyFrom(config));
+    const metas = (await getCatalog(type, id, extra, keyFrom(config))).map(withRatings);
     return { metas, cacheMaxAge: 1800, staleRevalidate: 2 * 3600, staleError: 7 * 24 * 3600 };
   } catch (e) {
     console.error(`catalog ${id} failed:`, e.message);
@@ -302,7 +325,9 @@ async function warmUp() {
   if (!ENV_KEY) return;
   const started = Date.now();
   await Promise.allSettled(ROWS.map((r) => recentArrivals(r, ENV_KEY)));
-  const results = await Promise.allSettled(ROWS.map((r) => getCatalog(r.type, r.id, {}, ENV_KEY)));
+  const results = await Promise.allSettled(
+    ROWS.map((r) => getCatalog(r.type, r.id, {}, ENV_KEY).then((metas) => metas.map(withRatings))) // also queues rating lookups
+  );
   const ok = results.filter((r) => r.status === 'fulfilled').length;
   console.log(`warm-up: ${ok}/${results.length} rows loaded in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
