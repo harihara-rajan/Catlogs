@@ -15,11 +15,12 @@ const { SERVICES, DUB_EDITIONS } = require('../services');
 const JW = process.env.JUSTWATCH_URL || 'https://apis.justwatch.com/graphql';
 const GAP = Number(process.env.JW_GAP) || 3000; // ms between requests: JustWatch rate-limits bursts
 const EVERY = 20 * 3600 * 1000; // re-scan a service at most this often
+const SCAN_VERSION = 2; // bump to force a re-scan of every service (2 = year slices)
 const SUBSCRIPTION = new Set(['FLATRATE', 'FREE', 'ADS']); // not RENT / BUY
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const QUERY = `query($c: Country!, $l: Language!, $p: [String!], $after: String) {
-  popularTitles(country: $c, filter: { packages: $p, objectTypes: [MOVIE] }, first: 100, after: $after) {
+const QUERY = `query($c: Country!, $l: Language!, $p: [String!], $min: Int, $max: Int, $after: String) {
+  popularTitles(country: $c, filter: { packages: $p, objectTypes: [MOVIE], releaseYear: { min: $min, max: $max } }, first: 100, after: $after) {
     totalCount
     pageInfo { endCursor hasNextPage }
     edges { node {
@@ -58,17 +59,25 @@ async function post(variables) {
   }
 }
 
-// All movies on one service (JustWatch package) with an `audio` track -> [[tmdbId, imdbId], ...]
-async function scan(country, pkg, audio) {
+// JustWatch only pages through the first ~1,900 titles of a list, so big catalogues are scanned
+// in release-year slices, halving any slice that's still too big.
+const CAP = 1850;
+
+// Movies on one service released in [min, max] with an `audio` track -> [[tmdbId, imdbId], ...]
+async function scanYears(country, pkg, audio, min, max) {
   const out = [];
   let after = null;
-  let seen = 0;
-  let total = 0;
-  for (let page = 0; page < 200; page++) {
-    const r = await post({ c: country, l: 'en', p: [pkg], after });
-    total = r.totalCount;
+  for (let page = 0; page < 20; page++) {
+    const r = await post({ c: country, l: 'en', p: [pkg], min, max, after });
+    if (page === 0 && r.totalCount > CAP && max > min) {
+      const mid = Math.floor((min + max) / 2);
+      await sleep(GAP);
+      const a = await scanYears(country, pkg, audio, min, mid);
+      await sleep(GAP);
+      const b = await scanYears(country, pkg, audio, mid + 1, max);
+      return a.concat(b);
+    }
     for (const { node } of r.edges) {
-      seen++;
       const ids = node.content && node.content.externalIds;
       if (!ids || !ids.tmdbId) continue;
       const dubbed = (node.offers || []).some((o) => SUBSCRIPTION.has(o.monetizationType) && (o.audioLanguages || []).includes(audio));
@@ -78,7 +87,15 @@ async function scan(country, pkg, audio) {
     after = r.pageInfo.endCursor;
     await sleep(GAP);
   }
-  console.log(`${country}:${pkg} ${audio}: ${out.length} of ${seen} movies (catalogue ${total})`);
+  return out;
+}
+
+async function scan(country, pkg, audio) {
+  const thisYear = new Date().getFullYear();
+  const found = await scanYears(country, pkg, audio, 1900, thisYear + 1);
+  const seen = new Set();
+  const out = found.filter(([t]) => !seen.has(t) && seen.add(t));
+  console.log(`${country}:${pkg} ${audio}: ${out.length} movies with this audio`);
   return out;
 }
 
@@ -98,13 +115,13 @@ async function scan(country, pkg, audio) {
   let stop = false;
   for (const [key, { country, audio, pkg }] of wanted) {
     const old = prevLists[key];
-    const fresh = old && old.complete && Date.now() - Date.parse(old.at) < EVERY;
+    const fresh = old && old.complete && old.v === SCAN_VERSION && Date.now() - Date.parse(old.at) < EVERY;
     if (fresh || stop) {
       if (old) result.lists[key] = old;
       continue;
     }
     try {
-      result.lists[key] = { complete: true, at: new Date().toISOString(), titles: await scan(country, pkg, audio) };
+      result.lists[key] = { complete: true, v: SCAN_VERSION, at: new Date().toISOString(), titles: await scan(country, pkg, audio) };
     } catch (e) {
       console.error(`${key}: ${e.message}`);
       if (old) result.lists[key] = old; // keep what we had
