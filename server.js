@@ -4,7 +4,8 @@ const addonInterface = require('./addon');
 const port = Number(process.env.PORT) || 7000;
 const MIN = 60 * 1000;
 
-serveHTTP(addonInterface, { port, cacheMaxAge: 3600 });
+// Short cache on the manifest so a new version reaches browsers and Stremio quickly.
+serveHTTP(addonInterface, { port, cacheMaxAge: 300 });
 
 // Load every row once at start-up, then again every 2 hours, so the Board opens instantly.
 setTimeout(() => addonInterface.warmUp().catch((e) => console.error('warm-up failed:', e.message)), 2000);
