@@ -72,7 +72,7 @@ TMDB alone.
 
 **Hidden Gems** rows (one per tick box, movies): films of the last 10 years on that box's services
 with a high IMDb rating but relatively few votes, best rated first: Indian languages 7.3+ with
-300–6,000 votes, English 7.2+ with 2,000–40,000 (no documentaries, TV movies or stand-up). Rebuilt every 12 hours; see `/debug/gems/ta-gems-movie`.
+300–6,000 votes, English 7.2+ with 2,000–40,000 (feature films only: no shorts, documentaries, TV movies, concerts or stand-up). Rebuilt every 12 hours; see `/debug/gems/ta-gems-movie`.
 
 ## Health check
 

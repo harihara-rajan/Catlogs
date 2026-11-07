@@ -92,7 +92,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.5.1',
+  version: '2.5.2',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -654,14 +654,16 @@ async function getWeekCatalog(row, extra, apiKey) {
 // big hits everyone has seen) that are streaming on the tick box's services. Candidates come from TMDB (best rated
 // first), the rating and vote count from IMDb's dataset. Rebuilt every 12 hours.
 // ---------------------------------------------------------------------------------------------
-// Last 10 years only (older well-rated films are classics, not hidden), and no documentaries,
-// TV movies or stand-up specials (which otherwise fill the English rows).
+// Last 10 years only (older well-rated films are classics, not hidden), feature length, and no
+// documentaries, TV movies, concert films or stand-up specials (which otherwise fill the rows).
 const GEMS = {
   indian: { minRating: 7.3, minVotes: 300, maxVotes: 6000, tmdbMinVotes: 3 },
   en: { minRating: 7.2, minVotes: 2000, maxVotes: 40000, tmdbMinVotes: 30 },
 };
 const GEMS_YEARS = 10;
-const GEMS_NOT_GENRES = '99|10770'; // documentary, TV movie
+const GEMS_NOT_GENRES = '99|10770|10402'; // documentary, TV movie, music (concerts)
+// Stand-up specials: comedy only, titled "Comedian Name: Show".
+const isStandUp = (item) => (item.genre_ids || []).join() === '35' && /^[^:]{3,40}: /.test(item.title || '');
 const GEMS_NOT_KEYWORDS = '9716'; // stand-up comedy
 const GEMS_PAGES = 15; // TMDB candidates: 15 pages × 20
 const GEMS_MAX = 80;
@@ -685,12 +687,13 @@ function gemsList(row, apiKey) {
       'primary_release_date.gte': `${THIS_YEAR - GEMS_YEARS}-01-01`,
       without_genres: GEMS_NOT_GENRES,
       without_keywords: GEMS_NOT_KEYWORDS,
+      'with_runtime.gte': 60,
       include_adult: false,
     };
     const candidates = [];
     for (let page = 1; page <= GEMS_PAGES; page++) {
       const d = await tmdb.discover('movie', { ...params, page }, apiKey);
-      candidates.push(...(d.results || []));
+      candidates.push(...(d.results || []).filter((r) => !isStandUp(r)));
       if (page >= (d.total_pages || 1)) break;
     }
     const metas = await Promise.all(
