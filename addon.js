@@ -1,6 +1,7 @@
 const { addonBuilder } = require('stremio-addon-sdk');
 const tmdb = require('./tmdb');
 const justwatch = require('./justwatch');
+const catalogue = require('./catalogue');
 const { cached, within } = require('./cache');
 const imdbRatings = require('./imdb-ratings');
 const mdblist = require('./mdblist');
@@ -63,6 +64,10 @@ const ROWS = EDITIONS.flatMap((e) => [
     }))
   ),
 ]);
+// One "Hidden Gems" movies row per tick box, e.g. ta-gems-movie.
+for (const e of EDITIONS) {
+  ROWS.push({ id: `${e.code}-gems-movie`, type: 'movie', name: `Hidden Gems · ${e.rowLabel || e.name}`, edition: e, gems: true });
+}
 // One movies row per "dubbed" tick box, e.g. ta-dub-movie.
 for (const e of DUB_EDITIONS) {
   ROWS.push({ id: `${e.code}-movie`, type: 'movie', name: e.rowName, edition: e, dub: true });
@@ -70,7 +75,7 @@ for (const e of DUB_EDITIONS) {
 const ROW_BY_ID = new Map(ROWS.map((r) => [r.id, r]));
 // The row's default sort goes first in its dropdown.
 function catalogEntry(r, options) {
-  if (r.newWeek) return { type: r.type, id: r.id, name: r.name, extra: [{ name: 'skip' }] }; // no dropdown
+  if (r.newWeek || r.gems) return { type: r.type, id: r.id, name: r.name, extra: [{ name: 'skip' }] }; // no dropdown
   const first = r.edition.defaultSort || 'Newest';
   const opts = options && [first, ...options.filter((o) => o !== first)];
   return {
@@ -87,7 +92,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.4.1',
+  version: '2.5.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -132,6 +137,7 @@ function chipsOf(e) {
   if (e.audio) return [];
   return [
     ...(e.newThisWeek ? [{ key: 'new', name: 'New This Week', types: e.types }] : []),
+    { key: 'gems', name: 'Hidden Gems', types: ['movie'] },
     ...e.services.map((k) => ({ key: k, name: SERVICES[k].name, types: e.types })),
   ];
 }
@@ -140,7 +146,7 @@ function rowChosen(r, chips) {
   const set = chips[r.edition.code];
   if (set === undefined) return false; // tick box not chosen
   if (set === null || r.dub) return true; // all rows
-  const key = r.newWeek ? 'new' : r.serviceKey;
+  const key = r.newWeek ? 'new' : r.gems ? 'gems' : r.serviceKey;
   return set.has(key) || set.has(`${key}:${r.type === 'movie' ? 'm' : 's'}`);
 }
 
@@ -156,11 +162,21 @@ function manifestFor(config) {
   // All "New This Week" rows go to the very top, then every other row in its usual order.
   let chosen = ROWS.filter((r) => rowChosen(r, chips));
   if (!chosen.length) chosen = ROWS.filter((r) => codes.includes(r.edition.code)); // nothing valid picked: all
-  const rows = [...chosen.filter((r) => r.newWeek), ...chosen.filter((r) => !r.newWeek)];
+  // New This Week rows first, then Hidden Gems, then the rest.
+  const rows = [...chosen.filter((r) => r.newWeek), ...chosen.filter((r) => r.gems), ...chosen.filter((r) => !r.newWeek && !r.gems)];
+  const fits = () => Buffer.byteLength(JSON.stringify(m)) <= MAX_MANIFEST;
   for (const options of DROPDOWN_TIERS) {
     m.catalogs = [...rows.map((r) => catalogEntry(r, options)), ...SEARCH_CATALOGS];
-    if (Buffer.byteLength(JSON.stringify(m)) <= MAX_MANIFEST) break;
+    if (fits()) return m;
   }
+  // Still too big (nearly everything ticked): leave out, in turn, the parts that matter least.
+  delete m.config; // only for the SDK's own page; the install page is ours
+  if (fits()) return m;
+  delete m.background;
+  if (fits()) return m;
+  m.catalogs = m.catalogs.filter((c) => !c.id.startsWith('search-'));
+  if (fits()) return m;
+  m.catalogs = m.catalogs.filter((c) => !/-gems-/.test(c.id) || /^(ta|ml|hi)-/.test(c.id));
   return m;
 }
 
@@ -256,17 +272,32 @@ const keyFrom = (config) => (config && config.tmdbApiKey ? String(config.tmdbApi
 
 // Is a title that turned up on a service on `added` (YYYY-MM-DD) genuinely new there?
 // JustWatch's "added" dates aren't reliable: it sometimes re-dates titles that have been on a
-// service for months (e.g. ~600 ZEE5 titles on 6 Nov 2026, Pariwar on Prime Video), and doesn't
-// keep the real dates. Indian films usually reach OTT 4-8 weeks after the cinema release (and OTT
-// originals on their release day), so a title only counts if it came out in the 90 days before
-// it turned up, or 45 days on a "bulk" day (a service getting an unusually large number of titles,
-// i.e. JustWatch catching up on its catalogue). Films that reach OTT later are missed.
+// service for months (e.g. ~600 ZEE5 titles on 6 Nov 2026, Pariwar on Prime Video). So the GitHub
+// job keeps its own record of what's on each service (catalogue.js): a title is new if it wasn't
+// on the service before that day, however old the film is. Where the record doesn't go back far
+// enough, a release-date rule stands in: Indian films usually reach OTT 4-8 weeks after the cinema
+// release, so the title counts if it came out in the 90 days before it turned up (45 days on a
+// "bulk" day, when a service gets an unusually large number of titles, i.e. JustWatch catching up).
 const NEW_WINDOW = 90;
 const NEW_WINDOW_BULK = 45;
 function looksNew(released, added, bulk) {
   if (!released) return false;
   const days = bulk ? NEW_WINDOW_BULK : NEW_WINDOW;
   return released >= new Date(Date.parse(added) - days * 24 * HOUR).toISOString().slice(0, 10);
+}
+
+// x = { added, bulk, services: Set(key), known } (known = first seen in the record itself).
+// -> { ok, by: 'record' | 'release date' }
+async function isNewArrival(edition, type, tmdbId, x, released) {
+  if (x.known) return { ok: true, by: 'record' };
+  let unknown = false;
+  for (const k of x.services) {
+    const r = await catalogue.arrivedAround(edition.region, edition.lang, type, k, tmdbId, x.added);
+    if (r === true) return { ok: true, by: 'record' };
+    if (r === null) unknown = true;
+  }
+  if (!unknown) return { ok: false, by: 'record' };
+  return { ok: looksNew(released, x.added, x.bulk), by: 'release date' };
 }
 
 // Days since a YYYY-MM-DD date (0 = today).
@@ -280,10 +311,15 @@ async function markNew(row, metas) {
   try {
     const found = await justwatch.arrivalsByTitle(row.edition.region, [{ key: row.serviceKey, jw: row.service.jw }], row.type);
     const since = new Date(Date.now() - 6 * 24 * HOUR).toISOString().slice(0, 10);
+    const e = row.edition;
+    for (const [id, first] of await catalogue.firstSeenSince(e.region, e.lang, row.type, row.serviceKey, since)) {
+      const x = found.get(id);
+      if (!x || x.added < since) found.set(id, { added: first, services: new Set([row.serviceKey]), bulk: false, known: true });
+    }
     for (const m of metas) {
       const x = found.get(m._tmdb);
       if (!x || x.added < since) continue;
-      if (!looksNew(m._date, x.added, x.bulk)) continue; // re-listed older title
+      if (!(await isNewArrival(row.edition, row.type, m._tmdb, x, m._date)).ok) continue; // re-dated older title
       m._newDays = daysSince(x.added);
     }
   } catch {
@@ -361,6 +397,7 @@ async function getCatalog(type, id, extra, apiKey) {
   if (!row || row.type !== type || !apiKey) return { metas: [], partial: false };
   if (row.dub) return getDubCatalog(row, extra, apiKey);
   if (row.newWeek) return getWeekCatalog(row, extra, apiKey);
+  if (row.gems) return getGemsCatalog(row, extra, apiKey);
   const choice = (extra && extra.genre) || row.edition.defaultSort || 'Newest';
   const range = rangeOf(choice);
 
@@ -562,6 +599,15 @@ function weekList(row, apiKey) {
     const services = e.services.map((key) => ({ key, jw: SERVICES[key][e.region].jw }));
     const found = await justwatch.arrivalsByTitle(e.region, services, row.type);
     const since = new Date(Date.now() - 6 * 24 * HOUR).toISOString().slice(0, 10);
+    // Plus titles the record saw arrive that JustWatch's lists missed.
+    for (const { key } of services) {
+      for (const [id, first] of await catalogue.firstSeenSince(e.region, e.lang, row.type, key, since)) {
+        const x = found.get(id);
+        if (!x) found.set(id, { imdbId: null, added: first, services: new Set([key]), bulk: false, known: true });
+        else if (x.added < since) Object.assign(x, { added: first, services: new Set([key]), bulk: false, known: true });
+        else x.services.add(key);
+      }
+    }
     let failed = 0;
     const seen = [];
     const metas = await Promise.all(
@@ -570,8 +616,8 @@ function weekList(row, apiKey) {
           const d = await tmdb.details(row.type, tmdbId, apiKey);
           const released = dateOf(d);
           if (d.original_language !== e.lang || !released || released > today()) return null;
-          const ok = looksNew(released, x.added, x.bulk);
-          seen.push({ title: d.title || d.name, released, added: x.added, bulk: x.bulk, services: [...x.services], kept: ok });
+          const { ok, by } = await isNewArrival(e, row.type, tmdbId, x, released);
+          seen.push({ title: d.title || d.name, released, added: x.added, bulk: x.bulk, services: [...x.services], kept: ok, by });
           if (!ok) return null;
           const m = await toMeta(d, row.type, apiKey, x.imdbId);
           const keys = e.services.filter((k) => x.services.has(k));
@@ -603,12 +649,78 @@ async function getWeekCatalog(row, extra, apiKey) {
 
 // Loads the first page of every row (default view) so rows open instantly. New arrivals are
 // prepared first, and only for rows whose default view uses them (Newest), Indian rows first.
+// ---------------------------------------------------------------------------------------------
+// "Hidden Gems": well-rated films with relatively few IMDb votes (so not the big hits everyone has
+// seen) that are streaming on the tick box's services. Candidates come from TMDB (best rated
+// first), the rating and vote count from IMDb's dataset. Rebuilt every 12 hours.
+// ---------------------------------------------------------------------------------------------
+const GEMS = {
+  indian: { minRating: 7.5, minVotes: 500, maxVotes: 15000, tmdbMinVotes: 3 },
+  en: { minRating: 7.4, minVotes: 3000, maxVotes: 60000, tmdbMinVotes: 50 },
+};
+const GEMS_PAGES = 15; // TMDB candidates: 15 pages × 20
+const GEMS_MAX = 80;
+const GEMS_PAGE = 40;
+const gemsStats = new Map();
+
+function gemsList(row, apiKey) {
+  return cached(`gems:${row.id}`, 12 * HOUR, async () => {
+    if (!imdbRatings.loaded()) throw new Error('IMDb ratings not loaded yet'); // not cached: try again later
+    const e = row.edition;
+    const rule = e.lang === 'en' ? GEMS.en : GEMS.indian;
+    const ids = e.services.flatMap((k) => SERVICES[k][e.region].ids);
+    const params = {
+      with_original_language: e.lang,
+      watch_region: e.region,
+      with_watch_providers: ids.join('|'),
+      with_watch_monetization_types: 'flatrate|free|ads',
+      sort_by: 'vote_average.desc',
+      'vote_count.gte': rule.tmdbMinVotes,
+      'primary_release_date.lte': today(),
+      include_adult: false,
+    };
+    const candidates = [];
+    for (let page = 1; page <= GEMS_PAGES; page++) {
+      const d = await tmdb.discover('movie', { ...params, page }, apiKey);
+      candidates.push(...(d.results || []));
+      if (page >= (d.total_pages || 1)) break;
+    }
+    const metas = await Promise.all(
+      candidates.map(async (item) => {
+        const imdb = await tmdb.imdbId('movie', item.id, apiKey);
+        if (!imdb) return null;
+        const rating = imdbRatings.get(imdb);
+        const votes = imdbRatings.votes(imdb);
+        if (rating == null || rating < rule.minRating || votes < rule.minVotes || votes > rule.maxVotes) return null;
+        const m = await toMeta(item, 'movie', apiKey, imdb);
+        m._rating = rating;
+        m._votes = votes;
+        return m;
+      })
+    );
+    const list = metas
+      .filter(Boolean)
+      .sort((a, b) => b._rating - a._rating || b._votes - a._votes)
+      .slice(0, GEMS_MAX);
+    gemsStats.set(row.id, { at: new Date().toISOString(), candidates: candidates.length, kept: list.length, titles: list.map((m) => `${m.name} (${m.releaseInfo}) ${m._rating} / ${m._votes} votes`) });
+    return list;
+  });
+}
+
+async function getGemsCatalog(row, extra, apiKey) {
+  const list = await within(8000, gemsList(row, apiKey), null);
+  if (!list) return { metas: [], partial: true };
+  const skip = Number((extra && extra.skip) || 0);
+  return { metas: list.slice(skip, skip + GEMS_PAGE).map(({ _rating, _votes, ...m }) => clean(m)), partial: false };
+}
+
 async function warmUp() {
   if (!ENV_KEY) return;
   const started = Date.now();
   for (const r of ROWS.filter((r) => r.newWeek)) await weekList(r, ENV_KEY).catch((e) => console.error('new this week:', e.message));
   for (const r of ROWS.filter((r) => r.dub)) await dubList(r, ENV_KEY).catch((e) => console.error('dubs:', e.message));
-  for (const r of ROWS.filter((r) => !r.dub && !r.newWeek && (r.edition.defaultSort || 'Newest') === 'Newest')) {
+  for (const r of ROWS.filter((r) => r.gems)) await gemsList(r, ENV_KEY).catch((e) => console.error('gems:', e.message));
+  for (const r of ROWS.filter((r) => !r.dub && !r.newWeek && !r.gems && (r.edition.defaultSort || 'Newest') === 'Newest')) {
     await recentArrivals(r, ENV_KEY).catch((e) => console.error('arrivals:', e.message));
   }
   const results = await Promise.allSettled(
@@ -630,6 +742,7 @@ module.exports.describe = (e) => {
   return `${bits.join(' · ')} — ${names}`;
 };
 module.exports.weekStats = (id) => ({ row: weekStats.get(id) || 'not built yet', file: justwatch.status() });
+module.exports.gemsStats = (id) => ({ row: gemsStats.get(id) || 'not built yet', imdb: imdbRatings.status() });
 module.exports.dubStats = (id) => ({ row: dubStats.get(id) || 'not built yet', file: dubs.status() });
 module.exports.warmUp = warmUp;
 module.exports.arrivalStats = (id) => ({ row: arrivalStats.get(id) || 'not checked yet', justwatch: justwatch.status() });

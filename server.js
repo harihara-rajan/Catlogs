@@ -84,6 +84,49 @@ app.get('/debug/week/:id', (req, res) => {
   res.json(addonInterface.weekStats(req.params.id));
 });
 
+// Health check: is everything the addon depends on fresh? { ok, problems, ... }. The GitHub job
+// checks this after each run and fails (GitHub then emails) when something is wrong.
+const justwatch = require('./justwatch');
+const dubsData = require('./dubs');
+const catalogueData = require('./catalogue');
+const startedAt = Date.now();
+const hoursSince = (iso) => (iso ? (Date.now() - Date.parse(iso)) / 3600000 : Infinity);
+app.get('/status', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const problems = [];
+  const arrivals = await justwatch.file().catch((e) => ({ error: e.message }));
+  const dubsFile = await dubsData.file().catch((e) => ({ error: e.message }));
+  const cat = await catalogueData.file().catch((e) => ({ error: e.message }));
+  const imdb = imdbRatings.status();
+  if (!addonInterface.hasServerKey) problems.push('No TMDB key on Render (TMDB_API_KEY)');
+  if (arrivals.error) problems.push(`New arrivals file unreadable: ${arrivals.error}`);
+  else if (hoursSince(arrivals.generatedAt) > 24) problems.push(`New arrivals not updated for ${Math.round(hoursSince(arrivals.generatedAt))} h (GitHub job or JustWatch)`);
+  if (dubsFile.error) problems.push(`Dubbed file unreadable: ${dubsFile.error}`);
+  else if (hoursSince(dubsFile.generatedAt) > 72) problems.push(`Dubbed list not updated for ${Math.round(hoursSince(dubsFile.generatedAt))} h`);
+  const warnings = [];
+  if (!cat.scannedAt) warnings.push('No service record yet (TMDB_API_KEY secret on GitHub?): NEW uses the release-date rule');
+  else if (hoursSince(cat.scannedAt) > 24) problems.push(`Service record not updated for ${Math.round(hoursSince(cat.scannedAt))} h`);
+  if (!imdb.titles && Date.now() - startedAt > 10 * 60000) problems.push('IMDb ratings not loaded');
+  res.json({
+    ok: problems.length === 0,
+    problems,
+    warnings,
+    version: addonInterface.manifest.version,
+    upSince: new Date(startedAt).toISOString(),
+    arrivals: arrivals.generatedAt || null,
+    dubs: dubsFile.generatedAt || null,
+    serviceRecord: cat.scannedAt || null,
+    imdb,
+    rottenTomatoes: mdblist.status(),
+  });
+});
+
+// What the last build of a Hidden Gems row found, e.g. /debug/gems/ta-gems-movie
+app.get('/debug/gems/:id', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(addonInterface.gemsStats(req.params.id));
+});
+
 // What the last build of a dubbed row found, e.g. /debug/dubs/ta-dub-movie
 app.get('/debug/dubs/:id', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');

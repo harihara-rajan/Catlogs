@@ -51,4 +51,4 @@ async function films(country, audio, services) {
 
 const status = () => ({ source: URL_, file: lastFile, lastError });
 
-module.exports = { films, status };
+module.exports = { films, status, file };

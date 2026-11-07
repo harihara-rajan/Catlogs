@@ -25,6 +25,7 @@ const SERVICES = {
 // language, `region` = country whose streaming catalogues are used, `defaultSort` = how rows are
 // ordered when nothing is picked in the dropdown (Newest if not set), `newThisWeek` = also add
 // "New This Week" rows (titles that arrived on any of the services in the last 7 days).
+// Every tick box also gets a "Hidden Gems" movies row (see GEMS in addon.js).
 const EDITIONS = [
   { code: 'ta', name: 'Tamil', lang: 'ta', region: 'IN', types: ['movie', 'series'], newThisWeek: true,
     services: ['prime', 'aha', 'netflix', 'sonyliv', 'sunnxt', 'jiohotstar', 'zee5'] },

@@ -1,6 +1,8 @@
 # Collects data from JustWatch and publishes it on the `data` branch, which the addon reads:
 #   arrivals.json  new arrivals per service (every 30 minutes)
 #   dubs.json      films with a Tamil audio track per service (re-scanned about once a day)
+#   catalogue.json what's on each service and since when, from TMDB (every 3 hours; needs the
+#                  repository secret TMDB_API_KEY)
 # (JustWatch rate-limits Render's shared addresses, so this runs on GitHub instead.)
 name: new-arrivals
 
@@ -33,9 +35,11 @@ jobs:
         run: |
           echo '{}' > previous.json
           echo '{}' > previous-dubs.json
+          echo '{}' > previous-catalogue.json
           if git fetch --depth=1 origin data 2>/dev/null; then
             git show origin/data:arrivals.json > previous.json 2>/dev/null || echo '{}' > previous.json
             git show origin/data:dubs.json > previous-dubs.json 2>/dev/null || echo '{}' > previous-dubs.json
+            git show origin/data:catalogue.json > previous-catalogue.json 2>/dev/null || echo '{}' > previous-catalogue.json
           fi
 
       - uses: actions/setup-node@v4
@@ -50,11 +54,18 @@ jobs:
         continue-on-error: true
         run: node scripts/fetch-dubs.js previous-dubs.json dubs.json
 
+      - name: What's on each service (TMDB, every 3 hours)
+        continue-on-error: true
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: node scripts/fetch-catalogue.js previous-catalogue.json catalogue.json
+
       - name: Publish to the data branch
         run: |
           mkdir publish
           if [ -s arrivals.json ]; then cp arrivals.json publish/; elif [ "$(cat previous.json)" != "{}" ]; then cp previous.json publish/arrivals.json; fi
           if [ -s dubs.json ]; then cp dubs.json publish/; elif [ "$(cat previous-dubs.json)" != "{}" ]; then cp previous-dubs.json publish/dubs.json; fi
+          if [ -s catalogue.json ]; then cp catalogue.json publish/; elif [ "$(cat previous-catalogue.json)" != "{}" ]; then cp previous-catalogue.json publish/catalogue.json; fi
           cd publish
           if [ -z "$(ls)" ]; then echo "Nothing to publish"; exit 1; fi
           git init -q -b data
@@ -63,4 +74,25 @@ jobs:
           git add .
           git commit -q -m "Data $(date -u +%Y-%m-%dT%H:%MZ)"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" data
+
+      # Health check: asks the addon whether everything it depends on is fresh (/status). If not,
+      # this step fails and GitHub emails the repository owner (Settings -> Notifications ->
+      # Actions decides how).
+      - name: Check the addon
+        run: |
+          body=""
+          for i in 1 2 3; do
+            body=$(curl -s --max-time 90 https://tamil-ott-catalogs.onrender.com/status) && [ -n "$body" ] && break
+            sleep 30
+          done
+          echo "$body"
+          echo "$body" | node -e '
+            let s = "";
+            process.stdin.on("data", (d) => (s += d)).on("end", () => {
+              let j;
+              try { j = JSON.parse(s); } catch { console.log("::error::The addon is not responding"); process.exit(1); }
+              for (const w of j.warnings || []) console.log("::warning::" + w);
+              if (!j.ok) { for (const p of j.problems) console.log("::error::" + p); process.exit(1); }
+              console.log("All good (v" + j.version + ")");
+            });'
 # schedule

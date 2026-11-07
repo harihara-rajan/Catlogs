@@ -14,11 +14,13 @@ language and service. You pick the languages on the install page (`/configure`):
 
 Tamil, Malayalam and Hindi also get **New This Week** rows at the top: titles in that language that
 arrived on any of its services in the last 7 days, most recent first, with where and when in the
-description. JustWatch's "added" dates aren't always right: it sometimes re-dates titles that have
-been on a service for months (e.g. ~600 ZEE5 titles on one day). So a title only counts as new if
-it came out in the 90 days before it turned up (45 days on days when a service gets more than 40
-additions, i.e. JustWatch catching up). Films that reach OTT later than that are missed.
-Check with `/debug/week/ta-new-movie`.
+description. JustWatch's "added" dates aren't always right (it sometimes re-dates hundreds of titles
+that have been on a service for months), so the GitHub job also keeps its own record of what's on
+each service and since when (`scripts/fetch-catalogue.js`, from TMDB every 3 hours, published as
+`catalogue.json`; needs the repository secret `TMDB_API_KEY`). A title is new if it wasn't on the
+service the day before, however old the film is. Where the record doesn't go back far enough, a
+title only counts if it came out in the 90 days before it turned up (45 on days when a service gets
+more than 40 additions). Check with `/debug/week/ta-new-movie`.
 
 The **Tamil dubbed** row uses the audio languages JustWatch records for each streaming offer. The
 GitHub job re-scans those services' movie catalogues about once a day (`scripts/fetch-dubs.js`,
@@ -67,6 +69,16 @@ TMDB alone.
   banners are available in `banner.js` but switched off.)
 - In the service rows, titles that arrived on that service in the last 7 days get a
   "NEW" chip on the poster (the date is in the description).
+
+**Hidden Gems** rows (one per tick box, movies): films on that box's services with a high IMDb
+rating but relatively few votes, best rated first: Indian languages 7.5+ with 500–15,000 votes,
+English 7.4+ with 3,000–60,000. Rebuilt every 12 hours; see `/debug/gems/ta-gems-movie`.
+
+## Health check
+
+`/status` says whether everything the addon depends on is fresh (new arrivals, dubbed list, service
+record, IMDb ratings). The GitHub job checks it after every run and fails when something is wrong,
+and GitHub then emails you (GitHub → Settings → Notifications → Actions).
 
 ## Search
 

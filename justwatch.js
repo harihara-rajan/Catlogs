@@ -79,4 +79,4 @@ async function arrivalsByTitle(country, services, type) {
 
 const status = () => ({ source: URL_, file: lastFile, lastError });
 
-module.exports = { recent, arrivalsByTitle, status };
+module.exports = { recent, arrivalsByTitle, status, file };

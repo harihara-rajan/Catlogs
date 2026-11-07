@@ -14,7 +14,7 @@ module.exports = function configurePage({ languages, selected, chips = {}, needs
         `<button type="button" class="chip${on(c.key, type) ? ' on' : ''}" data-key="${esc(c.key)}" data-type="${T[type].s}" aria-pressed="${on(c.key, type)}">${esc(label)}</button>`;
       let chipRow = '';
       if (l.chips && l.chips.length) {
-        const split = l.chips[0].types.length > 1;
+        const split = l.chips.some((c) => c.types.length > 1);
         chipRow = split
           // Movies and series: one line per service with two switches.
           ? `<div class="chips grid" data-for="${esc(l.code)}" role="group" aria-label="${esc(l.name)} rows">
