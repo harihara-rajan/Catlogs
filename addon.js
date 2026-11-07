@@ -87,7 +87,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.3.4',
+  version: '2.3.5',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -246,12 +246,17 @@ function recentArrivals(row, apiKey) {
 const keyFrom = (config) => (config && config.tmdbApiKey ? String(config.tmdbApiKey).trim() : ENV_KEY);
 
 // Is a title that turned up on a service on `added` (YYYY-MM-DD) genuinely new there?
-// JustWatch sometimes catches up on a service in one go (e.g. ~600 ZEE5 titles on one day), giving
-// titles that have been there for months today's date. So: on such "bulk" days only titles that
-// came out in the 3 months before count; on normal days, anything from the last 2 years.
+// JustWatch's "added" dates aren't reliable: it sometimes re-dates titles that have been on a
+// service for months (e.g. ~600 ZEE5 titles on 6 Nov 2026, Pariwar on Prime Video), and doesn't
+// keep the real dates. Indian films usually reach OTT 4-8 weeks after the cinema release (and OTT
+// originals on their release day), so a title only counts if it came out in the 90 days before
+// it turned up, or 45 days on a "bulk" day (a service getting an unusually large number of titles,
+// i.e. JustWatch catching up on its catalogue). Films that reach OTT later are missed.
+const NEW_WINDOW = 90;
+const NEW_WINDOW_BULK = 45;
 function looksNew(released, added, bulk) {
   if (!released) return false;
-  const days = bulk ? 90 : 730;
+  const days = bulk ? NEW_WINDOW_BULK : NEW_WINDOW;
   return released >= new Date(Date.parse(added) - days * 24 * HOUR).toISOString().slice(0, 10);
 }
 
@@ -467,8 +472,8 @@ async function getDubCatalog(row, extra, apiKey) {
 
 // ---------------------------------------------------------------------------------------------
 // "New This Week" rows: titles in the row's language that arrived on any of its services in the
-// last 7 days (from the new-arrivals file), most recent arrival first. Titles that only turned up
-// on a "bulk" day (JustWatch re-listing a catalogue) count only if released in the last 2 years.
+// last 7 days (from the new-arrivals file), most recent arrival first, if they look genuinely new
+// (see looksNew).
 // ---------------------------------------------------------------------------------------------
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const shortDate = (d) => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]}`;
@@ -481,15 +486,16 @@ function weekList(row, apiKey) {
     const found = await justwatch.arrivalsByTitle(e.region, services, row.type);
     const since = new Date(Date.now() - 6 * 24 * HOUR).toISOString().slice(0, 10);
     let failed = 0;
+    const seen = [];
     const metas = await Promise.all(
       [...found].filter(([, x]) => x.added >= since).map(async ([tmdbId, x]) => {
         try {
           const d = await tmdb.details(row.type, tmdbId, apiKey);
           const released = dateOf(d);
           if (d.original_language !== e.lang || !released || released > today()) return null;
-          // JustWatch sometimes re-lists titles that have been on a service for years; only count
-          // titles released in the two years before they turned up.
-          if (!looksNew(released, x.added, x.bulk)) return null;
+          const ok = looksNew(released, x.added, x.bulk);
+          seen.push({ title: d.title || d.name, released, added: x.added, bulk: x.bulk, services: [...x.services], kept: ok });
+          if (!ok) return null;
           const m = await toMeta(d, row.type, apiKey, x.imdbId);
           const keys = e.services.filter((k) => x.services.has(k));
           m.description = `New on ${keys.map((k) => SERVICES[k].name).join(', ')} · ${shortDate(x.added)}${m.description ? '\n\n' + m.description : ''}`;
@@ -505,7 +511,7 @@ function weekList(row, apiKey) {
       })
     );
     const list = metas.filter(Boolean).sort((a, b) => (a._added < b._added ? 1 : a._added > b._added ? -1 : b._pop - a._pop));
-    weekStats.set(row.id, { at: new Date().toISOString(), candidates: found.size, kept: list.length, failed });
+    weekStats.set(row.id, { at: new Date().toISOString(), candidates: found.size, kept: list.length, failed, titles: seen.sort((a, b) => (a.added < b.added ? 1 : -1)) });
     if (failed) throw new Error(`${failed} TMDB lookups failed for ${row.id}`);
     return list;
   });
