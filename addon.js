@@ -92,7 +92,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.5.0',
+  version: '2.5.1',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -650,14 +650,19 @@ async function getWeekCatalog(row, extra, apiKey) {
 // Loads the first page of every row (default view) so rows open instantly. New arrivals are
 // prepared first, and only for rows whose default view uses them (Newest), Indian rows first.
 // ---------------------------------------------------------------------------------------------
-// "Hidden Gems": well-rated films with relatively few IMDb votes (so not the big hits everyone has
-// seen) that are streaming on the tick box's services. Candidates come from TMDB (best rated
+// "Hidden Gems": well-rated films of the last 10 years with relatively few IMDb votes (so not the
+// big hits everyone has seen) that are streaming on the tick box's services. Candidates come from TMDB (best rated
 // first), the rating and vote count from IMDb's dataset. Rebuilt every 12 hours.
 // ---------------------------------------------------------------------------------------------
+// Last 10 years only (older well-rated films are classics, not hidden), and no documentaries,
+// TV movies or stand-up specials (which otherwise fill the English rows).
 const GEMS = {
-  indian: { minRating: 7.5, minVotes: 500, maxVotes: 15000, tmdbMinVotes: 3 },
-  en: { minRating: 7.4, minVotes: 3000, maxVotes: 60000, tmdbMinVotes: 50 },
+  indian: { minRating: 7.3, minVotes: 300, maxVotes: 6000, tmdbMinVotes: 3 },
+  en: { minRating: 7.2, minVotes: 2000, maxVotes: 40000, tmdbMinVotes: 30 },
 };
+const GEMS_YEARS = 10;
+const GEMS_NOT_GENRES = '99|10770'; // documentary, TV movie
+const GEMS_NOT_KEYWORDS = '9716'; // stand-up comedy
 const GEMS_PAGES = 15; // TMDB candidates: 15 pages × 20
 const GEMS_MAX = 80;
 const GEMS_PAGE = 40;
@@ -677,6 +682,9 @@ function gemsList(row, apiKey) {
       sort_by: 'vote_average.desc',
       'vote_count.gte': rule.tmdbMinVotes,
       'primary_release_date.lte': today(),
+      'primary_release_date.gte': `${THIS_YEAR - GEMS_YEARS}-01-01`,
+      without_genres: GEMS_NOT_GENRES,
+      without_keywords: GEMS_NOT_KEYWORDS,
       include_adult: false,
     };
     const candidates = [];

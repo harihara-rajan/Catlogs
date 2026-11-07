@@ -70,9 +70,9 @@ TMDB alone.
 - In the service rows, titles that arrived on that service in the last 7 days get a
   "NEW" chip on the poster (the date is in the description).
 
-**Hidden Gems** rows (one per tick box, movies): films on that box's services with a high IMDb
-rating but relatively few votes, best rated first: Indian languages 7.5+ with 500–15,000 votes,
-English 7.4+ with 3,000–60,000. Rebuilt every 12 hours; see `/debug/gems/ta-gems-movie`.
+**Hidden Gems** rows (one per tick box, movies): films of the last 10 years on that box's services
+with a high IMDb rating but relatively few votes, best rated first: Indian languages 7.3+ with
+300–6,000 votes, English 7.2+ with 2,000–40,000 (no documentaries, TV movies or stand-up). Rebuilt every 12 hours; see `/debug/gems/ta-gems-movie`.
 
 ## Health check
 
