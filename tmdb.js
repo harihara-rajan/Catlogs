@@ -89,7 +89,14 @@ function detailsFull(stremioType, tmdbId, apiKey) {
   return get(`/${tmdbType(stremioType)}/${tmdbId}`, { language: 'en-US', append_to_response: 'external_ids,watch/providers' }, apiKey, 12 * HOUR);
 }
 
+// TMDB entry for an IMDb ID (they never change).
+function findByImdb(stremioType, imdbId, apiKey) {
+  return get(`/find/${imdbId}`, { external_source: 'imdb_id' }, apiKey, 30 * DAY).then(
+    (d) => ((stremioType === 'series' ? d.tv_results : d.movie_results) || [])[0] || null
+  );
+}
+
 const poster = (p) => (p ? `${IMG}/w500${p}` : undefined);
 const backdrop = (p) => (p ? `${IMG}/w1280${p}` : undefined);
 
-module.exports = { providers, discover, imdbId, details, search, detailsFull, poster, backdrop, tmdbType };
+module.exports = { providers, discover, imdbId, details, search, detailsFull, findByImdb, poster, backdrop, tmdbType };

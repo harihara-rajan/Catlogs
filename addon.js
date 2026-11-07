@@ -87,7 +87,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.4.0',
+  version: '2.4.1',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -293,32 +293,63 @@ async function markNew(row, metas) {
 }
 
 // -> { metas, partial }; partial = new arrivals should have been merged in but weren't ready yet.
-// Search results: TMDB's best matches, with the services (in `region`) each one streams on.
+// Search results. Titles are matched with Cinemeta's search (Stremio's own, so the same titles
+// as its rows, and it copes with spelling variants better than TMDB's search); TMDB's search is the
+// fallback if Cinemeta can't be reached. Each title gets TMDB's details and the services (in
+// `region`) it streams on.
 const SEARCH_MAX = 20;
+const CINEMETA = 'https://v3-cinemeta.strem.io';
+
+function cinemetaSearch(type, q) {
+  return cached(`cinemeta:${type}:${q.toLowerCase()}`, 6 * HOUR, async () => {
+    const res = await fetch(`${CINEMETA}/catalog/${type}/top/search=${encodeURIComponent(q)}.json`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`Cinemeta ${res.status}`);
+    const d = await res.json();
+    return (d.metas || []).filter((m) => /^tt\d+$/.test(m.id)).slice(0, SEARCH_MAX);
+  });
+}
+
+async function searchMeta(type, tmdbId, imdbId, region, apiKey) {
+  const d = await tmdb.detailsFull(type, tmdbId, apiKey);
+  const imdb = imdbId || (d.external_ids && d.external_ids.imdb_id) || null;
+  const m = await toMeta(d, type, apiKey, imdb);
+  const where = (d['watch/providers'] && d['watch/providers'].results && d['watch/providers'].results[region]) || {};
+  const ids = new Set([...(where.flatrate || []), ...(where.free || []), ...(where.ads || [])].map((p) => p.provider_id));
+  const keys = Object.keys(SERVICES).filter((k) => SERVICES[k][region] && SERVICES[k][region].ids.some((i) => ids.has(i)));
+  const place = region === 'US' ? 'the US' : 'India';
+  const line = keys.length ? `On ${keys.map((k) => SERVICES[k].name).join(', ')} in ${place}` : `Not on the addon's services in ${place}`;
+  m.description = m.description ? `${line}\n\n${m.description}` : line;
+  m._services = keys;
+  m._lang = d.original_language;
+  return m;
+}
+
 async function getSearchCatalog(type, query, region, apiKey) {
   const q = String(query || '').trim();
   if (!q || !apiKey) return { metas: [], partial: false };
-  const found = ((await tmdb.search(type, q, apiKey)).results || []).filter((r) => r.poster_path).slice(0, SEARCH_MAX);
-  const metas = await Promise.all(
-    found.map(async (item) => {
-      try {
-        const d = await tmdb.detailsFull(type, item.id, apiKey);
-        const imdb = d.external_ids && d.external_ids.imdb_id;
-        const m = await toMeta(d, type, apiKey, imdb || null);
-        const where = (d['watch/providers'] && d['watch/providers'].results && d['watch/providers'].results[region]) || {};
-        const ids = new Set([...(where.flatrate || []), ...(where.free || []), ...(where.ads || [])].map((p) => p.provider_id));
-        const keys = Object.keys(SERVICES).filter((k) => SERVICES[k][region] && SERVICES[k][region].ids.some((i) => ids.has(i)));
-        const place = region === 'US' ? 'the US' : 'India';
-        const line = keys.length ? `On ${keys.map((k) => SERVICES[k].name).join(', ')} in ${place}` : `Not on the addon's services in ${place}`;
-        m.description = m.description ? `${line}\n\n${m.description}` : line;
-        m._services = keys;
-        m._lang = d.original_language;
-        return m;
-      } catch (err) {
-        return null;
-      }
-    })
-  );
+  let hits = null;
+  try {
+    hits = await cinemetaSearch(type, q);
+  } catch (err) {
+    console.error(`cinemeta search failed: ${err.message}`);
+  }
+  let metas;
+  if (hits) {
+    metas = await Promise.all(
+      hits.map(async (h) => {
+        try {
+          const t = await tmdb.findByImdb(type, h.id, apiKey);
+          if (t) return await searchMeta(type, t.id, h.id, region, apiKey);
+        } catch (err) {
+          /* fall through to Cinemeta's own entry */
+        }
+        return { id: h.id, type, name: h.name, poster: h.poster, releaseInfo: h.releaseInfo, behaviorHints: type === 'movie' ? { defaultVideoId: h.id } : undefined };
+      })
+    );
+  } else {
+    const found = ((await tmdb.search(type, q, apiKey)).results || []).filter((r) => r.poster_path).slice(0, SEARCH_MAX);
+    metas = await Promise.all(found.map((item) => searchMeta(type, item.id, null, region, apiKey).catch(() => null)));
+  }
   return { metas: metas.filter(Boolean), partial: false };
 }
 
