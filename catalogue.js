@@ -33,13 +33,15 @@ const dayBefore = (d) => new Date(Date.parse(d) - 24 * 3600 * 1000).toISOString(
 // Did `tmdbId` arrive on `service` around `added` (YYYY-MM-DD)?
 //   true  = the record covers that day and the title wasn't there before it
 //   false = it was already on the service before (JustWatch re-dated it)
-//   null  = the record doesn't go back that far (or isn't there): can't tell
+//   null  = the record doesn't go back that far, or doesn't list the title there: can't tell
 async function arrivedAround(region, lang, type, service, tmdbId, added) {
   const set = (await file()).sets[`${region}:${lang}:${type}:${service}`];
   if (!set || set.since >= added) return null;
   const t = set.titles[String(tmdbId)];
-  if (!t) return true; // TMDB hasn't picked it up yet: new
-  return t[0] >= dayBefore(added);
+  // Not in TMDB's list for that service: either TMDB hasn't caught up yet or doesn't list it
+  // there at all; can't tell which, so leave it to the release-date rule.
+  if (!t) return null;
+  return t[0] > set.since && t[0] >= dayBefore(added);
 }
 
 // Titles first seen on `service` on or after `since` (and after the record began): Map(tmdbId -> first day).
