@@ -54,6 +54,11 @@ const TAGS = {
   manoramamax: { label: 'ManoramaMAX', bg: '#D71920', fg: '#fff' },
   appletv:     { label: 'Apple TV',    bg: '#111',    fg: '#fff' },
   lionsgate:   { label: 'Lionsgate',   bg: '#1F1F1F', fg: '#fff' },
+  disney:      { label: 'Disney+',     bg: '#0E2A8C', fg: '#fff' },
+  hbomax:      { label: 'HBO Max',     bg: '#002BE7', fg: '#fff' },
+  hulu:        { label: 'Hulu',        bg: '#1CE783', fg: '#0b0b0b' },
+  paramount:   { label: 'Paramount+',  bg: '#0064FF', fg: '#fff' },
+  peacock:     { label: 'Peacock',     bg: '#111',    fg: '#fff' },
 };
 
 // Chip sizes, as a share of the poster width (chosen to read on a TV, ~200 px per poster).

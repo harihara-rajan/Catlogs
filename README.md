@@ -68,6 +68,14 @@ TMDB alone.
 - In the service rows, titles that arrived on that service in the last 7 days get a
   "NEW" chip on the poster (the date is in the description).
 
+## Search
+
+The addon also answers Stremio's search: its results appear as "OTT Catalogs" rows (movies and
+series) with the same IMDb badges, a tag for the service each title streams on in India (the US if
+only English (US) is ticked), and "On Prime Video, aha in India" at the top of the description.
+Stremio lists search rows in the order of your addons, so Cinemeta's own rows come first unless
+the addon is moved above it.
+
 ## Ratings on posters
 
 Each poster gets a small strip with its **IMDb** rating, plus the **Rotten Tomatoes** critics score

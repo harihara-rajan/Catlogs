@@ -87,7 +87,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.3.5',
+  version: '2.4.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -158,13 +158,22 @@ function manifestFor(config) {
   if (!chosen.length) chosen = ROWS.filter((r) => codes.includes(r.edition.code)); // nothing valid picked: all
   const rows = [...chosen.filter((r) => r.newWeek), ...chosen.filter((r) => !r.newWeek)];
   for (const options of DROPDOWN_TIERS) {
-    m.catalogs = rows.map((r) => catalogEntry(r, options));
+    m.catalogs = [...rows.map((r) => catalogEntry(r, options)), ...SEARCH_CATALOGS];
     if (Buffer.byteLength(JSON.stringify(m)) <= MAX_MANIFEST) break;
   }
   return m;
 }
 
-const builder = new addonBuilder(manifest);
+// Search: rows in Stremio's search results with the same IMDb badges, plus where each title is
+// streaming (service tag). Only used for searching (search is required), so not on the Board.
+const SEARCH_CATALOGS = ['movie', 'series'].map((type) => ({
+  type,
+  id: `search-${type}`,
+  name: 'OTT Catalogs',
+  extra: [{ name: 'search', isRequired: true }],
+}));
+
+const builder = new addonBuilder({ ...manifest, catalogs: [...manifest.catalogs, ...SEARCH_CATALOGS] });
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -284,6 +293,38 @@ async function markNew(row, metas) {
 }
 
 // -> { metas, partial }; partial = new arrivals should have been merged in but weren't ready yet.
+// Search results: TMDB's best matches, with the services (in `region`) each one streams on.
+const SEARCH_MAX = 20;
+async function getSearchCatalog(type, query, region, apiKey) {
+  const q = String(query || '').trim();
+  if (!q || !apiKey) return { metas: [], partial: false };
+  const found = ((await tmdb.search(type, q, apiKey)).results || []).filter((r) => r.poster_path).slice(0, SEARCH_MAX);
+  const metas = await Promise.all(
+    found.map(async (item) => {
+      try {
+        const d = await tmdb.detailsFull(type, item.id, apiKey);
+        const imdb = d.external_ids && d.external_ids.imdb_id;
+        const m = await toMeta(d, type, apiKey, imdb || null);
+        const where = (d['watch/providers'] && d['watch/providers'].results && d['watch/providers'].results[region]) || {};
+        const ids = new Set([...(where.flatrate || []), ...(where.free || []), ...(where.ads || [])].map((p) => p.provider_id));
+        const keys = Object.keys(SERVICES).filter((k) => SERVICES[k][region] && SERVICES[k][region].ids.some((i) => ids.has(i)));
+        const place = region === 'US' ? 'the US' : 'India';
+        const line = keys.length ? `On ${keys.map((k) => SERVICES[k].name).join(', ')} in ${place}` : `Not on the addon's services in ${place}`;
+        m.description = m.description ? `${line}\n\n${m.description}` : line;
+        m._services = keys;
+        m._lang = d.original_language;
+        return m;
+      } catch (err) {
+        return null;
+      }
+    })
+  );
+  return { metas: metas.filter(Boolean), partial: false };
+}
+
+// Country used for "where to watch" in search: India unless only US rows are installed.
+const searchRegion = (config) => (TICK_BOXES.some((e) => languagesFrom(config).includes(e.code) && e.region === 'IN') ? 'IN' : 'US');
+
 async function getCatalog(type, id, extra, apiKey) {
   const row = ROW_BY_ID.get(id);
   if (!row || row.type !== type || !apiKey) return { metas: [], partial: false };
@@ -345,7 +386,7 @@ const showsRottenTomatoes = (row) => !!row && row.edition.lang === 'en';
 // Adds ratings: a badge on the poster, a line at the top of the description, and Stremio's
 // imdbRating field. With withRt, Rotten Tomatoes too (titles without a known score are queued for
 // lookup). meta._services (rows that mix services) adds a service tag to the poster.
-function withRatings({ _services, _newDays, _banner, ...meta }, withRt) {
+function withRatings({ _services, _newDays, _banner, _lang, ...meta }, withRt) {
   const isImdb = /^tt\d+$/.test(meta.id);
   const imdb = isImdb ? imdbRatings.get(meta.id) : null;
   const rt = isImdb && withRt ? mdblist.rt(meta.type, meta.id) : null;
@@ -367,6 +408,11 @@ function withRatings({ _services, _newDays, _banner, ...meta }, withRt) {
 
 builder.defineCatalogHandler(async ({ type, id, extra, config }) => {
   try {
+    if (id === `search-${type}`) {
+      const { metas } = await getSearchCatalog(type, extra && extra.search, searchRegion(config), keyFrom(config));
+      // Rotten Tomatoes for English titles only, as in the rows.
+      return { metas: metas.map((m) => withRatings(clean(m), m._lang === "en")), cacheMaxAge: 3600, staleRevalidate: 3600 };
+    }
     const { metas, partial } = await getCatalog(type, id, extra, keyFrom(config));
     const withRt = showsRottenTomatoes(ROW_BY_ID.get(id));
     const rated = metas.map((m) => withRatings(m, withRt));

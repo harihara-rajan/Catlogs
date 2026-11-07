@@ -79,7 +79,17 @@ function details(stremioType, tmdbId, apiKey) {
   return get(`/${tmdbType(stremioType)}/${tmdbId}`, { language: 'en-US' }, apiKey, DAY);
 }
 
+// Title search (cached for 6 hours).
+function search(stremioType, query, apiKey) {
+  return get(`/search/${tmdbType(stremioType)}`, { query, include_adult: 'false', language: 'en-US' }, apiKey, 6 * HOUR);
+}
+
+// Details with IMDb ID and where-to-watch in one request (cached for 12 hours).
+function detailsFull(stremioType, tmdbId, apiKey) {
+  return get(`/${tmdbType(stremioType)}/${tmdbId}`, { language: 'en-US', append_to_response: 'external_ids,watch/providers' }, apiKey, 12 * HOUR);
+}
+
 const poster = (p) => (p ? `${IMG}/w500${p}` : undefined);
 const backdrop = (p) => (p ? `${IMG}/w1280${p}` : undefined);
 
-module.exports = { providers, discover, imdbId, details, poster, backdrop, tmdbType };
+module.exports = { providers, discover, imdbId, details, search, detailsFull, poster, backdrop, tmdbType };
