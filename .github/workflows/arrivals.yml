@@ -79,6 +79,8 @@ jobs:
       # this step fails and GitHub emails the repository owner (Settings -> Notifications ->
       # Actions decides how).
       - name: Check the addon
+        # Not on code pushes: the new version may still be deploying.
+        if: github.event_name != 'push'
         run: |
           body=""
           for i in 1 2 3; do
