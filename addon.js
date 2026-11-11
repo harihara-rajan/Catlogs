@@ -92,7 +92,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.5.3',
+  version: '2.6.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -237,6 +237,33 @@ const clean = ({ _tmdb, _date, ...meta }) => meta;
 // Titles in this row's language that JustWatch says arrived on this service in the last week.
 // These usually reach TMDB a day or so later; until then they're merged in here.
 const arrivalStats = new Map(); // row id -> what the last arrivals check found (for /debug)
+
+// Series rows (India): recent shows (first aired in the last 2 years, up to today) whose TMDB
+// network is the service or one of its TV channels (SERVICES[key].IN.networks). TMDB often has the
+// network weeks before its "where to watch" data (e.g. Celebrity MasterChef Tamil on Sony VIZHA /
+// SonyLIV), so these are merged in like new arrivals.
+const NETWORK_YEARS = 2;
+function networkShows(row, apiKey) {
+  const nets = row.service.networks;
+  if (row.type !== 'series' || !nets || !nets.length) return Promise.resolve([]);
+  return cached(`networks:${row.id}`, 6 * HOUR, async () => {
+    const from = new Date(Date.now() - NETWORK_YEARS * 365 * 24 * HOUR).toISOString().slice(0, 10);
+    const d = await tmdb.discover(
+      'series',
+      {
+        with_original_language: row.edition.lang,
+        with_networks: nets.join('|'),
+        'first_air_date.gte': from,
+        'first_air_date.lte': today(),
+        sort_by: 'first_air_date.desc',
+        include_adult: false,
+        language: 'en-US',
+      },
+      apiKey
+    );
+    return Promise.all((d.results || []).map((it) => toMeta(it, 'series', apiKey)));
+  });
+}
 
 function recentArrivals(row, apiKey) {
   return cached(`arrivals:${row.id}`, 20 * 60 * 1000, async () => {
@@ -406,7 +433,7 @@ async function getCatalog(type, id, extra, apiKey) {
   if (page > 500) return { metas: [], partial: false }; // TMDB max
 
   const mergeArrivals = page === 1 && (choice === 'Newest' || range);
-  const [data, arrivals] = await Promise.all([
+  const [data, arrivalsOnly, fromNetworks] = await Promise.all([
     tmdb.discover(
       type,
       {
@@ -424,11 +451,14 @@ async function getCatalog(type, id, extra, apiKey) {
     // Don't hold the row up for JustWatch: if it's slow, show TMDB's list now; the arrivals are
     // saved in the background and included next time.
     mergeArrivals ? within(6000, recentArrivals(row, apiKey), null) : [],
+    mergeArrivals ? within(6000, networkShows(row, apiKey), []) : [],
   ]);
+  const fromJw = arrivalsOnly || [];
+  const arrivals = [...fromJw, ...(fromNetworks || []).filter((n) => !fromJw.some((a) => a._tmdb === n._tmdb))];
 
   const listed = page > (data.total_pages || 0) ? [] : await Promise.all((data.results || []).map((it) => toMeta(it, type, apiKey)));
-  const partial = arrivals === null;
-  if (!arrivals || !arrivals.length) return { metas: (await markNew(row, listed)).map(clean), partial };
+  const partial = arrivalsOnly === null;
+  if (!arrivals.length) return { metas: (await markNew(row, listed)).map(clean), partial };
 
   const have = new Set(listed.map((x) => x._tmdb));
   let extra_ = arrivals.filter((a) => !have.has(a._tmdb));

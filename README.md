@@ -80,6 +80,12 @@ with a high IMDb rating but relatively few votes, best rated first: Indian langu
 record, IMDb ratings). The GitHub job checks it after every run and fails when something is wrong,
 and GitHub then emails you (GitHub → Settings → Notifications → Actions).
 
+**New TV shows** often have their TV channel or service in TMDB weeks before TMDB knows where they
+stream (e.g. Celebrity MasterChef Tamil on Sony VIZHA / SonyLIV). So series rows also include
+shows from the last 2 years whose TMDB network is that service or one of its channels
+(`networks` in `services.js`: Sony VIZHA → SonyLIV, STAR Vijay → JioHotstar, Zee Tamil → ZEE5, Sun
+TV → Sun NXT, …), slotted in by date in the newest-first view.
+
 ## Search
 
 The addon also answers Stremio's search: its results appear as "OTT Catalogs" rows (movies and

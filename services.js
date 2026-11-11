@@ -4,14 +4,18 @@
 // Streaming services, per country: TMDB provider IDs (TMDB and JustWatch share these) and
 // JustWatch package short names (for recent arrivals). Some services have several plans.
 const SERVICES = {
-  prime:       { name: 'Prime Video',    IN: { ids: [119], jw: ['prv'] },  US: { ids: [9], jw: ['amp'] } },
-  aha:         { name: 'aha',            IN: { ids: [532], jw: ['aha'] } },
-  netflix:     { name: 'Netflix',        IN: { ids: [8], jw: ['nfx'] },    US: { ids: [8, 1796], jw: ['nfx', 'nfa'] } },
-  sonyliv:     { name: 'SonyLIV',        IN: { ids: [237], jw: ['snl'] } },
-  sunnxt:      { name: 'Sun NXT',        IN: { ids: [309], jw: ['snx'] } },
-  jiohotstar:  { name: 'JioHotstar',     IN: { ids: [2336], jw: ['jhs'] } },
-  zee5:        { name: 'ZEE5',           IN: { ids: [232], jw: ['zee'] } },
-  manoramamax: { name: 'ManoramaMAX',    IN: { ids: [482], jw: ['mrx'] } },
+  // networks (India, series only): TMDB network ids of the service itself and of the TV channels
+  // whose shows stream on it (e.g. Sony VIZHA -> SonyLIV, STAR Vijay -> JioHotstar, Sun TV -> Sun
+  // NXT). New shows often have their network in TMDB weeks before their "where to watch" data, so
+  // series rows also include recent shows from these networks.
+  prime:       { name: 'Prime Video',    IN: { ids: [119], jw: ['prv'], networks: [1024] },  US: { ids: [9], jw: ['amp'] } },
+  aha:         { name: 'aha',            IN: { ids: [532], jw: ['aha'], networks: [3758] } },
+  netflix:     { name: 'Netflix',        IN: { ids: [8], jw: ['nfx'], networks: [213] },    US: { ids: [8, 1796], jw: ['nfx', 'nfa'] } },
+  sonyliv:     { name: 'SonyLIV',        IN: { ids: [237], jw: ['snl'], networks: [2646, 9574, 676, 1708] } },
+  sunnxt:      { name: 'Sun NXT',        IN: { ids: [309], jw: ['snx'], networks: [9155, 3026] } },
+  jiohotstar:  { name: 'JioHotstar',     IN: { ids: [2336], jw: ['jhs'], networks: [8036, 3919, 501, 159, 524] } },
+  zee5:        { name: 'ZEE5',           IN: { ids: [232], jw: ['zee'], networks: [2590, 9040, 526] } },
+  manoramamax: { name: 'ManoramaMAX',    IN: { ids: [482], jw: ['mrx'], networks: [9538, 5422] } },
   appletv:     { name: 'Apple TV',       IN: { ids: [350], jw: ['atp'] },  US: { ids: [350], jw: ['atp'] } },
   lionsgate:   { name: 'Lionsgate Play', IN: { ids: [561], jw: ['lgp'] } },
   disney:      { name: 'Disney+',        US: { ids: [337], jw: ['dnp'] } },
