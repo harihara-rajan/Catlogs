@@ -1,13 +1,28 @@
-const A = 'https://tamil-ott-catalogs.onrender.com';
+const KEY = process.env.TMDB_API_KEY || '';
+const JW = 'https://apis.justwatch.com/graphql';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function tmdb(path, params = {}) {
+  const u = new URL('https://api.themoviedb.org/3' + path);
+  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+  const h = {};
+  if (KEY.startsWith('eyJ')) h.Authorization = `Bearer ${KEY}`; else u.searchParams.set('api_key', KEY);
+  return (await fetch(u, { headers: h })).json();
+}
+const shows = ['Celebrity MasterChef Tamil', 'MasterChef Tamil', 'Tamil Idol', 'Notebook 90s', 'Crime Patrol Tamil', 'Madam Police', 'Sony Vizha', 'Anbil Avan', 'Asareeri', 'Sardar 2'];
 (async () => {
-  const s = await (await fetch(`${A}/status`)).json();
-  console.log('STATUS', JSON.stringify({ ok: s.ok, problems: s.problems, warnings: s.warnings, version: s.version, upSince: s.upSince, arrivals: s.arrivals, dubs: s.dubs, serviceRecord: s.serviceRecord, imdb: s.imdb && s.imdb.loadedAt, rt: s.rottenTomatoes && s.rottenTomatoes.requestsToday }));
-  for (const id of ['ta-new-movie', 'ta-new-series', 'ml-new-movie', 'hi-new-movie']) {
-    const t = id.endsWith('series') ? 'series' : 'movie';
-    for (let i = 0; i < 10; i++) { const c = await (await fetch(`${A}/catalog/${t}/${id}.json`)).json(); if (c.metas.length || i > 3) break; await sleep(10000); }
-    const w = await (await fetch(`${A}/debug/week/${id}`)).json();
-    console.log(`\n== ${id}: kept ${w.row.kept}`);
-    for (const x of w.row.titles || []) console.log(`${x.kept ? 'KEEP' : 'drop'} ${String(x.title).slice(0, 28).padEnd(29)} rel ${x.released} added ${x.added}${x.bulk ? ' (bulk)' : ''} ${x.services.join(',')} [${x.by}]`);
+  console.log('key?', KEY ? 'yes' : 'no');
+  for (const q of shows) {
+    for (const t of ['tv', 'movie']) {
+      const r = await tmdb(`/search/${t}`, { query: q });
+      for (const x of (r.results || []).slice(0, 3)) {
+        const p = await tmdb(`/${t}/${x.id}/watch/providers`);
+        const inn = (p.results && p.results.IN) || {};
+        const prov = [...(inn.flatrate || []), ...(inn.free || []), ...(inn.ads || [])].map((y) => y.provider_name).join(',');
+        console.log(`TMDB ${t} "${q}" -> ${x.name || x.title} (${(x.first_air_date || x.release_date || '').slice(0, 4)}) lang=${x.original_language} id=${x.id} IN: ${prov || '-'}`);
+      }
+    }
+    const j = await (await fetch(JW, { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'Mozilla/5.0' }, body: JSON.stringify({ query: `query($q: String!) { popularTitles(country: IN, filter: { searchQuery: $q }, first: 3) { edges { node { __typename content(country: IN, language: en) { title originalReleaseYear externalIds { tmdbId } } offers(country: IN, platform: WEB) { monetizationType package { shortName } } } } } }`, variables: { q } }) })).json();
+    for (const e of (j.data ? j.data.popularTitles.edges : [])) console.log(`JW "${q}" -> ${e.node.__typename} ${e.node.content.title} (${e.node.content.originalReleaseYear}) tmdb=${e.node.content.externalIds && e.node.content.externalIds.tmdbId} offers: ${[...new Set(e.node.offers.map((o) => o.package.shortName + '/' + o.monetizationType))].join(' ') || '-'}`);
+    await sleep(1500);
   }
 })();
