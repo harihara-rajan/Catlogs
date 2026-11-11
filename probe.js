@@ -6,14 +6,17 @@ async function tmdb(path, params = {}) {
   if (KEY.startsWith('eyJ')) h.Authorization = `Bearer ${KEY}`; else u.searchParams.set('api_key', KEY);
   return (await fetch(u, { headers: h })).json();
 }
+const P = { prime: '119', netflix: '8', jiohotstar: '2336', zee5: '232', sonyliv: '237', sunnxt: '309', aha: '532', manoramamax: '482' };
 (async () => {
-  for (const id of [338683, 338687, 339004, 339001, 339213]) {
-    const d = await tmdb(`/tv/${id}`);
-    console.log(`SHOW ${d.name} | networks: ${(d.networks || []).map((n) => `${n.name}#${n.id}`).join(', ')} | first ${d.first_air_date} | eps ${d.number_of_episodes}`);
-  }
-  // Big Tamil channels: which TMDB network ids, and how many current Tamil shows each has
-  for (const name of ['Sony Vizha', 'Star Vijay', 'Vijay Television', 'Zee Tamil', 'Sun TV', 'Colors Tamil', 'Kalaignar TV', 'Sony LIV']) {
-    const r = await tmdb('/search/company', { query: name });
-    console.log(`COMPANY? ${name}: ${(r.results || []).slice(0, 3).map((c) => c.name + '#' + c.id).join(', ')}`);
+  for (const [k, ids] of Object.entries(P)) {
+    const tally = {};
+    for (const lang of ['ta', 'hi', 'ml', 'te']) {
+      const d = await tmdb('/discover/tv', { with_original_language: lang, watch_region: 'IN', with_watch_providers: ids, sort_by: 'popularity.desc' });
+      for (const s of (d.results || []).slice(0, 12)) {
+        const x = await tmdb(`/tv/${s.id}`);
+        for (const n of x.networks || []) tally[`${n.name}#${n.id}`] = (tally[`${n.name}#${n.id}`] || 0) + 1;
+      }
+    }
+    console.log(`NET ${k}: ${Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([n, c]) => `${n} ${c}`).join(', ')}`);
   }
 })();
