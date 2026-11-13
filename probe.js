@@ -1,10 +1,10 @@
+const A = 'https://tamil-ott-catalogs.onrender.com';
 (async () => {
-  const h = { 'user-agent': 'Mozilla/5.0', 'accept-language': 'en' };
-  const page = await (await fetch('https://www.youtube.com/@ottreleasess/videos', { headers: h })).text();
-  const id = (/"channelId":"(UC[\w-]{22})"/.exec(page) || /"externalId":"(UC[\w-]{22})"/.exec(page) || [])[1];
-  console.log('CHANNEL', id, 'page bytes', page.length);
-  if (!id) return;
-  const rss = await (await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${id}`, { headers: h })).text();
-  const entries = [...rss.matchAll(/<entry>[\s\S]*?<title>([^<]*)<\/title>[\s\S]*?<published>([^<]*)<\/published>[\s\S]*?<media:description>([^<]*)<\/media:description>/g)];
-  for (const [, t, p, d] of entries) console.log(`VID ${p.slice(0, 10)} | ${t} || ${d.replace(/\s+/g, ' ').slice(0, 160)}`);
+  for (const id of ['ta-new-movie', 'ta-new-series']) {
+    const t = id.endsWith('series') ? 'series' : 'movie';
+    const c = await (await fetch(`${A}/catalog/${t}/${id}.json`)).json();
+    console.log(`ROW ${id}: ` + c.metas.map((m) => `${m.name} [${m.id}] poster=${m.poster ? m.poster.slice(-50) : 'NONE'}`).join('\n   '));
+    const w = await (await fetch(`${A}/debug/week/${id}`)).json();
+    for (const x of w.row.titles || []) if (x.kept) console.log(`  KEEP ${x.title} rel ${x.released} added ${x.added} ${x.services.join(',')} [${x.by}]`);
+  }
 })();
