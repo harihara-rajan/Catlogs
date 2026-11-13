@@ -18,9 +18,10 @@ description. JustWatch's "added" dates aren't always right (it sometimes re-date
 that have been on a service for months), so the GitHub job also keeps its own record of what's on
 each service and since when (`scripts/fetch-catalogue.js`, from TMDB every 3 hours, published as
 `catalogue.json`; needs the repository secret `TMDB_API_KEY`). A title is new if it wasn't on the
-service the day before, however old the film is. Where the record doesn't go back far enough, a
-title only counts if it came out in the 90 days before it turned up (45 on days when a service gets
-more than 40 additions). Check with `/debug/week/ta-new-movie`.
+service the day before and came out in the 2 years before (series: 30 days; TMDB's lists sometimes
+drop a title and add it back, so the record alone isn't enough). Where the record doesn't go back
+far enough, a film only counts if it came out in the 90 days before it turned up (45 on days when
+a service gets more than 40 additions; series 30). Titles without a poster are left out. Check with `/debug/week/ta-new-movie`.
 
 The **Tamil dubbed** row uses the audio languages JustWatch records for each streaming offer. The
 GitHub job re-scans those services' movie catalogues about once a day (`scripts/fetch-dubs.js`,

@@ -92,7 +92,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.6.0',
+  version: '2.6.1',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -307,24 +307,31 @@ const keyFrom = (config) => (config && config.tmdbApiKey ? String(config.tmdbApi
 // "bulk" day, when a service gets an unusually large number of titles, i.e. JustWatch catching up).
 const NEW_WINDOW = 90;
 const NEW_WINDOW_BULK = 45;
-function looksNew(released, added, bulk) {
+// Even when the record says a title has just arrived, it must have come out in this many days
+// before: TMDB's lists sometimes drop a title and add it back, which would make e.g. a 2022 show
+// look new. Films often reach OTT months after the cinema release; series premiere on OTT.
+const RECORD_WINDOW = { movie: 730, series: 30 };
+const SERIES_WINDOW = 30;
+const daysBefore = (date, days) => new Date(Date.parse(date) - days * 24 * HOUR).toISOString().slice(0, 10);
+function looksNew(released, added, bulk, type = 'movie') {
   if (!released) return false;
-  const days = bulk ? NEW_WINDOW_BULK : NEW_WINDOW;
-  return released >= new Date(Date.parse(added) - days * 24 * HOUR).toISOString().slice(0, 10);
+  const days = type === 'series' ? SERIES_WINDOW : bulk ? NEW_WINDOW_BULK : NEW_WINDOW;
+  return released >= daysBefore(added, days);
 }
 
 // x = { added, bulk, services: Set(key), known } (known = first seen in the record itself).
 // -> { ok, by: 'record' | 'release date' }
 async function isNewArrival(edition, type, tmdbId, x, released) {
-  if (x.known) return { ok: true, by: 'record' };
+  const recent = !!released && released >= daysBefore(x.added, RECORD_WINDOW[type] || RECORD_WINDOW.movie);
+  if (x.known) return { ok: recent, by: 'record' };
   let unknown = false;
   for (const k of x.services) {
     const r = await catalogue.arrivedAround(edition.region, edition.lang, type, k, tmdbId, x.added);
-    if (r === true) return { ok: true, by: 'record' };
+    if (r === true) return { ok: recent, by: 'record' };
     if (r === null) unknown = true;
   }
   if (!unknown) return { ok: false, by: 'record' };
-  return { ok: looksNew(released, x.added, x.bulk), by: 'release date' };
+  return { ok: looksNew(released, x.added, x.bulk, type), by: 'release date' };
 }
 
 // Days since a YYYY-MM-DD date (0 = today).
@@ -646,6 +653,7 @@ function weekList(row, apiKey) {
           const d = await tmdb.details(row.type, tmdbId, apiKey);
           const released = dateOf(d);
           if (d.original_language !== e.lang || !released || released > today()) return null;
+          if (!d.poster_path) return null; // would show as a blank card
           const { ok, by } = await isNewArrival(e, row.type, tmdbId, x, released);
           seen.push({ title: d.title || d.name, released, added: x.added, bulk: x.bulk, services: [...x.services], kept: ok, by });
           if (!ok) return null;
