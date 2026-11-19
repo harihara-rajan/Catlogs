@@ -89,11 +89,11 @@ async function day(country, packages, date) {
   try { prev = JSON.parse(fs.readFileSync(prevPath, 'utf8')); } catch {}
   const prevSets = (prev && prev.sets) || {};
 
-  // New arrivals are only used by rows whose default view is Newest (not the English rows, which
-  // default to Popular), so only those services are collected. Grouped by country.
+  // New arrivals are used by rows whose default view is Newest and by New This Week rows, so those
+  // services are collected. Grouped by country.
   const byCountry = new Map(); // country -> Map(setKey -> packages)
   for (const e of EDITIONS) {
-    if ((e.defaultSort || 'Newest') !== 'Newest') continue;
+    if ((e.defaultSort || 'Newest') !== 'Newest' && !e.newThisWeek) continue;
     for (const key of e.services) {
       const svc = SERVICES[key][e.region];
       if (!byCountry.has(e.region)) byCountry.set(e.region, new Map());

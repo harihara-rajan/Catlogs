@@ -12,7 +12,7 @@ language and service. You pick the languages on the install page (`/configure`):
 | English (US)    | US      | Netflix · Prime Video · Disney+ · HBO Max · Hulu · Apple TV · Paramount+ · Peacock |
 | Tamil dubbed (Malayalam & Hindi) | India | One movies row: Malayalam and Hindi films with a Tamil audio track on Prime Video · JioHotstar · SonyLIV · ZEE5 · aha |
 
-Tamil, Malayalam and Hindi also get **New This Week** rows at the top: titles in that language that
+Tamil, Malayalam and Hindi also get **New This Week** rows at the top, and English gets one shared **New This Week · English** row per type covering both English boxes' services in India and the US (most popular first; titles with almost no votes or attention left out): titles in that language that
 arrived on any of its services in the last 7 days, most recent first, with where and when in the
 description. JustWatch's "added" dates aren't always right (it sometimes re-dates hundreds of titles
 that have been on a service for months), so the GitHub job also keeps its own record of what's on

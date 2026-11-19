@@ -1,6 +1,6 @@
 // Keeps a record of what's on each service, so the addon can tell a genuinely new arrival from a
 // title JustWatch has merely re-dated (it sometimes gives hundreds of old titles a new "added"
-// date). For every tick box with "New This Week" rows (Tamil, Malayalam, Hindi), each service and
+// date). For every Indian-language tick box with "New This Week" rows (Tamil, Malayalam, Hindi), each service and
 // each type, it lists the titles TMDB says are streaming there (TMDB copies JustWatch daily) and
 // remembers when each one was first seen.
 //
@@ -93,7 +93,9 @@ async function main() {
   const out = { version: VERSION, scannedAt: new Date().toISOString(), sets: { ...prev.sets } };
   let ok = 0;
   let failed = 0;
-  for (const e of EDITIONS.filter((x) => x.newThisWeek)) {
+  // Indian languages only: the English catalogues are too big for TMDB to list in full, so the
+  // English New This Week rows use the release-date rule instead.
+  for (const e of EDITIONS.filter((x) => x.newThisWeek && x.lang !== 'en')) {
     for (const type of e.types) {
       for (const service of e.services) {
         const key = `${e.region}:${e.lang}:${type}:${service}`;

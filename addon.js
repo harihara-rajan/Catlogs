@@ -50,7 +50,7 @@ const ENV_KEY = process.env.TMDB_API_KEY || '';
 // Each language's "New This Week" rows, then one row per service (manifestFor puts all the
 // "New This Week" rows at the very top).
 const ROWS = EDITIONS.flatMap((e) => [
-  ...(e.newThisWeek
+  ...(e.newThisWeek && e.lang !== 'en'
     ? e.types.map((type) => ({ id: `${e.code}-new-${type}`, type, name: `New This Week · ${e.rowLabel || e.name}`, edition: e, newWeek: true }))
     : []),
   ...e.services.flatMap((key) =>
@@ -64,6 +64,14 @@ const ROWS = EDITIONS.flatMap((e) => [
     }))
   ),
 ]);
+// English: one shared "New This Week · English" row per type (en-new-movie, en-new-series) covering
+// the services of both English tick boxes (India and US); shown if either box has it switched on.
+const EN_WEEK_EDITIONS = EDITIONS.filter((e) => e.lang === 'en' && e.newThisWeek);
+if (EN_WEEK_EDITIONS.length) {
+  for (const type of ['movie', 'series']) {
+    ROWS.push({ id: `en-new-${type}`, type, name: 'New This Week · English', edition: EN_WEEK_EDITIONS[0], editions: EN_WEEK_EDITIONS, newWeek: true });
+  }
+}
 // One "Hidden Gems" movies row per tick box, e.g. ta-gems-movie.
 for (const e of EDITIONS) {
   ROWS.push({ id: `${e.code}-gems-movie`, type: 'movie', name: `Hidden Gems · ${e.rowLabel || e.name}`, edition: e, gems: true });
@@ -75,7 +83,8 @@ for (const e of DUB_EDITIONS) {
 const ROW_BY_ID = new Map(ROWS.map((r) => [r.id, r]));
 // The row's default sort goes first in its dropdown.
 function catalogEntry(r, options) {
-  if (r.newWeek || r.gems) return { type: r.type, id: r.id, name: r.name, extra: [{ name: 'skip' }] }; // no dropdown
+  if (r.newWeek) return { type: r.type, id: r.id, name: r.name }; // one page, no dropdown
+  if (r.gems) return { type: r.type, id: r.id, name: r.name, extra: [{ name: 'skip' }] }; // no dropdown
   const first = r.edition.defaultSort || 'Newest';
   const opts = options && [first, ...options.filter((o) => o !== first)];
   return {
@@ -92,7 +101,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.6.1',
+  version: '2.7.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -143,6 +152,7 @@ function chipsOf(e) {
 }
 
 function rowChosen(r, chips) {
+  if (r.editions) return r.editions.some((edition) => rowChosen({ ...r, editions: undefined, edition }, chips));
   const set = chips[r.edition.code];
   if (set === undefined) return false; // tick box not chosen
   if (set === null || r.dub) return true; // all rows
@@ -161,7 +171,7 @@ function manifestFor(config) {
   m.behaviorHints = { configurable: true, configurationRequired: !hasKey };
   // All "New This Week" rows go to the very top, then every other row in its usual order.
   let chosen = ROWS.filter((r) => rowChosen(r, chips));
-  if (!chosen.length) chosen = ROWS.filter((r) => codes.includes(r.edition.code)); // nothing valid picked: all
+  if (!chosen.length) chosen = ROWS.filter((r) => (r.editions || [r.edition]).some((e) => codes.includes(e.code))); // nothing valid picked: all
   // New This Week rows first, then Hidden Gems, then the rest.
   const rows = [...chosen.filter((r) => r.newWeek), ...chosen.filter((r) => r.gems), ...chosen.filter((r) => !r.newWeek && !r.gems)];
   const fits = () => Buffer.byteLength(JSON.stringify(m)) <= MAX_MANIFEST;
@@ -170,13 +180,14 @@ function manifestFor(config) {
     if (fits()) return m;
   }
   // Still too big (nearly everything ticked): leave out, in turn, the parts that matter least.
+  // (Order: SDK config, background, English Hidden Gems, search.)
   delete m.config; // only for the SDK's own page; the install page is ours
   if (fits()) return m;
   delete m.background;
   if (fits()) return m;
-  m.catalogs = m.catalogs.filter((c) => !c.id.startsWith('search-'));
+  m.catalogs = m.catalogs.filter((c) => !/-gems-/.test(c.id) || /^(ta|ml|hi)-/.test(c.id)); // English gems
   if (fits()) return m;
-  m.catalogs = m.catalogs.filter((c) => !/-gems-/.test(c.id) || /^(ta|ml|hi)-/.test(c.id));
+  m.catalogs = m.catalogs.filter((c) => !c.id.startsWith('search-'));
   return m;
 }
 
@@ -311,6 +322,10 @@ const NEW_WINDOW_BULK = 45;
 // before: TMDB's lists sometimes drop a title and add it back, which would make e.g. a 2022 show
 // look new. Films often reach OTT months after the cinema release; series premiere on OTT.
 const RECORD_WINDOW = { movie: 730, series: 30 };
+// English New This Week: skip titles with fewer votes AND lower TMDB popularity than this; show at most EN_WEEK_MAX.
+const EN_MIN_VOTES = 20;
+const EN_MIN_POPULARITY = 8;
+const EN_WEEK_MAX = 40;
 const SERIES_WINDOW = 30;
 const daysBefore = (date, days) => new Date(Date.parse(date) - days * 24 * HOUR).toISOString().slice(0, 10);
 function looksNew(released, added, bulk, type = 'movie') {
@@ -630,49 +645,86 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const shortDate = (d) => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]}`;
 const weekStats = new Map();
 
+// One tick box's part of a New This Week row: [{ meta, keys, added, region }], plus stats.
+async function weekForEdition(row, e, apiKey) {
+  const services = e.services.map((key) => ({ key, jw: SERVICES[key][e.region].jw }));
+  const found = await justwatch.arrivalsByTitle(e.region, services, row.type);
+  const since = new Date(Date.now() - 6 * 24 * HOUR).toISOString().slice(0, 10);
+  // Plus titles the record saw arrive that JustWatch's lists missed.
+  for (const { key } of services) {
+    for (const [id, first] of await catalogue.firstSeenSince(e.region, e.lang, row.type, key, since)) {
+      const x = found.get(id);
+      if (!x) found.set(id, { imdbId: null, added: first, services: new Set([key]), bulk: false, known: true });
+      else if (x.added < since) Object.assign(x, { added: first, services: new Set([key]), bulk: false, known: true });
+      else x.services.add(key);
+    }
+  }
+  let failed = 0;
+  const seen = [];
+  const items = await Promise.all(
+    [...found].filter(([, x]) => x.added >= since).map(async ([tmdbId, x]) => {
+      try {
+        const d = await tmdb.details(row.type, tmdbId, apiKey);
+        const released = dateOf(d);
+        if (d.original_language !== e.lang || !released || released > today()) return null;
+        if (!d.poster_path) return null; // would show as a blank card
+        // English: the services add many obscure titles every week; skip ones hardly anyone has
+        // looked at or rated.
+        if (e.lang === 'en' && (d.vote_count || 0) < EN_MIN_VOTES && (d.popularity || 0) < EN_MIN_POPULARITY) return null;
+        const { ok, by } = await isNewArrival(e, row.type, tmdbId, x, released);
+        seen.push({ title: d.title || d.name, region: e.region, released, added: x.added, bulk: x.bulk, services: [...x.services], kept: ok, by, votes: d.vote_count, pop: Math.round(d.popularity || 0) });
+        if (!ok) return null;
+        const meta = await toMeta(d, row.type, apiKey, x.imdbId);
+        meta._pop = d.popularity || 0;
+        return { meta, keys: e.services.filter((k) => x.services.has(k)), added: x.added, region: e.region };
+      } catch (err) {
+        if (!/ 404 /.test(err.message)) failed++;
+        return null;
+      }
+    })
+  );
+  return { items: items.filter(Boolean), candidates: found.size, failed, seen };
+}
+
 function weekList(row, apiKey) {
   return cached(`week:${row.id}`, 20 * 60 * 1000, async () => {
-    const e = row.edition;
-    const services = e.services.map((key) => ({ key, jw: SERVICES[key][e.region].jw }));
-    const found = await justwatch.arrivalsByTitle(e.region, services, row.type);
-    const since = new Date(Date.now() - 6 * 24 * HOUR).toISOString().slice(0, 10);
-    // Plus titles the record saw arrive that JustWatch's lists missed.
-    for (const { key } of services) {
-      for (const [id, first] of await catalogue.firstSeenSince(e.region, e.lang, row.type, key, since)) {
-        const x = found.get(id);
-        if (!x) found.set(id, { imdbId: null, added: first, services: new Set([key]), bulk: false, known: true });
-        else if (x.added < since) Object.assign(x, { added: first, services: new Set([key]), bulk: false, known: true });
-        else x.services.add(key);
+    const editions = row.editions || [row.edition];
+    const parts = await Promise.all(editions.map((e) => weekForEdition(row, e, apiKey)));
+    const shared = editions.length > 1; // English: say which country each service is in
+    const REGION = { IN: 'India', US: 'US' };
+    // Merge the tick boxes' parts by title.
+    const byId = new Map();
+    for (const { items } of parts) {
+      for (const it of items) {
+        const t = byId.get(it.meta.id);
+        const where = it.keys.map((k) => `${SERVICES[k].name}${shared ? ` (${REGION[it.region] || it.region})` : ''}`);
+        if (!t) byId.set(it.meta.id, { ...it, where, keys: [...it.keys] });
+        else {
+          t.where.push(...where);
+          for (const k of it.keys) if (!t.keys.includes(k)) t.keys.push(k);
+          if (it.added > t.added) t.added = it.added;
+        }
       }
     }
-    let failed = 0;
-    const seen = [];
-    const metas = await Promise.all(
-      [...found].filter(([, x]) => x.added >= since).map(async ([tmdbId, x]) => {
-        try {
-          const d = await tmdb.details(row.type, tmdbId, apiKey);
-          const released = dateOf(d);
-          if (d.original_language !== e.lang || !released || released > today()) return null;
-          if (!d.poster_path) return null; // would show as a blank card
-          const { ok, by } = await isNewArrival(e, row.type, tmdbId, x, released);
-          seen.push({ title: d.title || d.name, released, added: x.added, bulk: x.bulk, services: [...x.services], kept: ok, by });
-          if (!ok) return null;
-          const m = await toMeta(d, row.type, apiKey, x.imdbId);
-          const keys = e.services.filter((k) => x.services.has(k));
-          m.description = `New on ${keys.map((k) => SERVICES[k].name).join(', ')} · ${shortDate(x.added)}${m.description ? '\n\n' + m.description : ''}`;
-          m._services = keys;
-          m._newDays = daysSince(x.added); // "NEW · 2d" ribbon
-          m._added = x.added;
-          m._pop = d.popularity || 0;
-          return m;
-        } catch (err) {
-          if (!/ 404 /.test(err.message)) failed++;
-          return null;
-        }
-      })
-    );
-    const list = metas.filter(Boolean).sort((a, b) => (a._added < b._added ? 1 : a._added > b._added ? -1 : b._pop - a._pop));
-    weekStats.set(row.id, { at: new Date().toISOString(), candidates: found.size, kept: list.length, failed, titles: seen.sort((a, b) => (a.added < b.added ? 1 : -1)) });
+    const metas = [...byId.values()].map(({ meta, keys, added, where }) => {
+      meta.description = `New on ${where.join(', ')} · ${shortDate(added)}${meta.description ? '\n\n' + meta.description : ''}`;
+      meta._services = keys;
+      meta._newDays = daysSince(added); // NEW chip
+      meta._added = added;
+      return meta;
+    });
+    // Indian rows: most recent arrival first. English: most popular first (as the other English rows).
+    const english = row.edition.lang === 'en';
+    const byDate = (a, b) => (a._added < b._added ? 1 : a._added > b._added ? -1 : b._pop - a._pop);
+    const list = metas.sort(english ? (a, b) => b._pop - a._pop : byDate).slice(0, english ? EN_WEEK_MAX : undefined);
+    const failed = parts.reduce((n, p) => n + p.failed, 0);
+    weekStats.set(row.id, {
+      at: new Date().toISOString(),
+      candidates: parts.reduce((n, p) => n + p.candidates, 0),
+      kept: list.length,
+      failed,
+      titles: parts.flatMap((p) => p.seen).sort((a, b) => (a.added < b.added ? 1 : -1)),
+    });
     if (failed) throw new Error(`${failed} TMDB lookups failed for ${row.id}`);
     return list;
   });
