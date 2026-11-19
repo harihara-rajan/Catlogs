@@ -101,7 +101,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.7.0',
+  version: '2.7.1',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -645,6 +645,13 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const shortDate = (d) => `${Number(d.slice(8, 10))} ${MONTHS[Number(d.slice(5, 7)) - 1]}`;
 const weekStats = new Map();
 
+// A series' latest season that has started (TMDB details `seasons`, specials left out), or null.
+function latestSeason(d) {
+  const now = today();
+  const started = (d.seasons || []).filter((x) => x.season_number > 0 && x.air_date && x.air_date <= now);
+  return started.sort((a, b) => (a.air_date < b.air_date ? 1 : -1))[0] || null;
+}
+
 // One tick box's part of a New This Week row: [{ meta, keys, added, region }], plus stats.
 async function weekForEdition(row, e, apiKey) {
   const services = e.services.map((key) => ({ key, jw: SERVICES[key][e.region].jw }));
@@ -665,7 +672,9 @@ async function weekForEdition(row, e, apiKey) {
     [...found].filter(([, x]) => x.added >= since).map(async ([tmdbId, x]) => {
       try {
         const d = await tmdb.details(row.type, tmdbId, apiKey);
-        const released = dateOf(d);
+        // Series: the latest season that has started counts (a new season of an older show is new).
+        const season = row.type === 'series' ? latestSeason(d) : null;
+        const released = season ? season.air_date : dateOf(d);
         if (d.original_language !== e.lang || !released || released > today()) return null;
         if (!d.poster_path) return null; // would show as a blank card
         // English: the services add many obscure titles every week; skip ones hardly anyone has
@@ -676,7 +685,8 @@ async function weekForEdition(row, e, apiKey) {
         if (!ok) return null;
         const meta = await toMeta(d, row.type, apiKey, x.imdbId);
         meta._pop = d.popularity || 0;
-        return { meta, keys: e.services.filter((k) => x.services.has(k)), added: x.added, region: e.region };
+        const seasonNo = season && season.season_number > 1 ? season.season_number : null;
+        return { meta, keys: e.services.filter((k) => x.services.has(k)), added: x.added, region: e.region, seasonNo };
       } catch (err) {
         if (!/ 404 /.test(err.message)) failed++;
         return null;
@@ -706,8 +716,9 @@ function weekList(row, apiKey) {
         }
       }
     }
-    const metas = [...byId.values()].map(({ meta, keys, added, where }) => {
-      meta.description = `New on ${where.join(', ')} · ${shortDate(added)}${meta.description ? '\n\n' + meta.description : ''}`;
+    const metas = [...byId.values()].map(({ meta, keys, added, where, seasonNo }) => {
+      const what = seasonNo ? `Season ${seasonNo} new on` : 'New on';
+      meta.description = `${what} ${where.join(', ')} · ${shortDate(added)}${meta.description ? '\n\n' + meta.description : ''}`;
       meta._services = keys;
       meta._newDays = daysSince(added); // NEW chip
       meta._added = added;

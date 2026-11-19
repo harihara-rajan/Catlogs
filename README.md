@@ -21,7 +21,7 @@ each service and since when (`scripts/fetch-catalogue.js`, from TMDB every 3 hou
 service the day before and came out in the 2 years before (series: 30 days; TMDB's lists sometimes
 drop a title and add it back, so the record alone isn't enough). Where the record doesn't go back
 far enough, a film only counts if it came out in the 90 days before it turned up (45 on days when
-a service gets more than 40 additions; series 30). Titles without a poster are left out. Check with `/debug/week/ta-new-movie`.
+a service gets more than 40 additions; series 30). Titles without a poster are left out. For series, the latest season's start date counts, so a new season of an older show is new ("Season 3 new on Prime Video"). Check with `/debug/week/ta-new-movie`.
 
 The **Tamil dubbed** row uses the audio languages JustWatch records for each streaming offer. The
 GitHub job re-scans those services' movie catalogues about once a day (`scripts/fetch-dubs.js`,
