@@ -1,16 +1,12 @@
 const A = 'https://tamil-ott-catalogs.onrender.com';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
-  for (let i = 0; i < 40; i++) {
-    try { const m = await (await fetch(`${A}/manifest.json?x=${Date.now()}`)).json(); if (m.version === '2.7.0') { console.log('live', m.version); break; } } catch (e) {}
-    await sleep(15000);
-  }
-  await sleep(30000);
-  for (const [t, id] of [['movie', 'en-new-movie'], ['series', 'en-new-series'], ['movie', 'ta-new-movie']]) {
-    let c; for (let i = 0; i < 12; i++) { c = await (await fetch(`${A}/catalog/${t}/${id}.json`)).json(); if (c.metas.length) break; await sleep(10000); }
-    console.log(`\nROW ${id}: ${c.metas.length}`);
-    for (const m of c.metas.slice(0, 25)) console.log(`  ${m.name} (${m.releaseInfo}) ${m.imdbRating || '-'} | ${(m.description || '').split('\n').find((l) => l.startsWith('New on')) || ''}`);
+  await sleep(11 * 60000); // arrivals file cache (10 min) + week cache refresh
+  for (const [t, id] of [['movie', 'en-new-movie'], ['series', 'en-new-series']]) {
+    await fetch(`${A}/catalog/${t}/${id}.json`); await sleep(20000);
     const w = await (await fetch(`${A}/debug/week/${id}`)).json();
-    if (w.row && w.row.titles) console.log(`  candidates ${w.row.candidates}, judged ${w.row.titles.length}, kept ${w.row.kept}`);
+    console.log(`\nROW ${id}: candidates ${w.row.candidates}, judged ${w.row.titles.length}, kept ${w.row.kept}, at ${w.row.at}`);
+    const titles = w.row.titles.sort((a, b) => b.pop - a.pop);
+    for (const x of titles.slice(0, 45)) console.log(`  ${x.kept ? 'KEEP' : 'drop'} ${x.region} ${String(x.title).slice(0, 34).padEnd(35)} rel ${x.released} added ${x.added}${x.bulk ? ' bulk' : ''} votes ${x.votes} pop ${x.pop} ${x.services.join(',')}`);
   }
 })();
