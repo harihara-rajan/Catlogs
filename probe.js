@@ -1,17 +1,16 @@
 const A = 'https://tamil-ott-catalogs.onrender.com';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
-  const w = await (await fetch(`${A}/debug/week/ml-new-movie`)).json();
-  for (const x of w.row.titles || []) console.log(`T ${x.kept ? 'KEEP' : 'drop'} ${x.title} rel ${x.released} added ${x.added}${x.bulk ? ' bulk' : ''} ${x.services.join(',')} [${x.by}]`);
-  const KEY = process.env.TMDB_API_KEY;
-  for (const q of ['Bandra', 'The Third Murder']) {
-    const u = new URL('https://api.themoviedb.org/3/search/movie'); u.searchParams.set('query', q);
-    const h = {}; if (KEY.startsWith('eyJ')) h.Authorization = `Bearer ${KEY}`; else u.searchParams.set('api_key', KEY);
-    const r = await (await fetch(u, { headers: h })).json();
-    for (const m of (r.results || []).filter((m) => m.original_language === 'ml').slice(0, 3)) {
-      const p = new URL(`https://api.themoviedb.org/3/movie/${m.id}/watch/providers`); if (!KEY.startsWith('eyJ')) p.searchParams.set('api_key', KEY);
-      const pr = await (await fetch(p, { headers: h })).json();
-      const inn = (pr.results && pr.results.IN) || {};
-      console.log(`S ${q} -> ${m.title} ${m.release_date} id=${m.id} poster=${!!m.poster_path} IN: ${[...(inn.flatrate || []), ...(inn.ads || []), ...(inn.free || [])].map((x) => x.provider_name).join(',') || '-'}`);
-    }
+  for (let i = 0; i < 40; i++) {
+    try { const m = await (await fetch(`${A}/manifest.json?x=${Date.now()}`)).json(); if (m.version === '2.7.0') { console.log('live', m.version); break; } } catch (e) {}
+    await sleep(15000);
+  }
+  await sleep(30000);
+  for (const [t, id] of [['movie', 'en-new-movie'], ['series', 'en-new-series'], ['movie', 'ta-new-movie']]) {
+    let c; for (let i = 0; i < 12; i++) { c = await (await fetch(`${A}/catalog/${t}/${id}.json`)).json(); if (c.metas.length) break; await sleep(10000); }
+    console.log(`\nROW ${id}: ${c.metas.length}`);
+    for (const m of c.metas.slice(0, 25)) console.log(`  ${m.name} (${m.releaseInfo}) ${m.imdbRating || '-'} | ${(m.description || '').split('\n').find((l) => l.startsWith('New on')) || ''}`);
+    const w = await (await fetch(`${A}/debug/week/${id}`)).json();
+    if (w.row && w.row.titles) console.log(`  candidates ${w.row.candidates}, judged ${w.row.titles.length}, kept ${w.row.kept}`);
   }
 })();
