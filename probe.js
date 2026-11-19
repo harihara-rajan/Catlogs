@@ -1,7 +1,7 @@
 const A = 'https://tamil-ott-catalogs.onrender.com';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
-  await sleep(11 * 60000); // arrivals file cache (10 min) + week cache refresh
+
   for (const [t, id] of [['movie', 'en-new-movie'], ['series', 'en-new-series']]) {
     await fetch(`${A}/catalog/${t}/${id}.json`); await sleep(20000);
     const w = await (await fetch(`${A}/debug/week/${id}`)).json();
