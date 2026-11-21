@@ -29,7 +29,7 @@ published as `dubs.json` on the `data` branch). Netflix and Sun NXT don't share 
 with JustWatch, so their dubs can't be included; ZEE5 shares them for only some titles. Check what
 the server has with `/debug/dubs/ta-dub-movie`.
 
-Rows show the **newest releases first** (English rows: **most popular first**). The dropdown on each row switches to **Popular**,
+Rows show the **newest releases first**. The dropdown on each row switches to **Popular**,
 **Top rated**, or a year range. Stremio rejects addon manifests over 8 KB, so the dropdown adapts
 to the number of rows: every year back to 1980 when it fits, then recent years plus decades and
 "Older" (before 2000), then decades only, then just the sort orders; with four or five boxes ticked

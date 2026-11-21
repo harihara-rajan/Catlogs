@@ -37,9 +37,9 @@ const EDITIONS = [
     services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5', 'manoramamax'] },
   { code: 'hi', name: 'Hindi', lang: 'hi', region: 'IN', types: ['movie', 'series'], newThisWeek: true,
     services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5'] },
-  { code: 'en-in', name: 'English (India)', rowLabel: 'English (IN)', lang: 'en', region: 'IN', types: ['movie', 'series'], defaultSort: 'Popular', newThisWeek: true,
+  { code: 'en-in', name: 'English (India)', rowLabel: 'English (IN)', lang: 'en', region: 'IN', types: ['movie', 'series'], newThisWeek: true,
     services: ['netflix', 'prime', 'jiohotstar', 'appletv', 'sonyliv', 'lionsgate'] },
-  { code: 'en-us', name: 'English (US)', rowLabel: 'English (US)', lang: 'en', region: 'US', types: ['movie', 'series'], defaultSort: 'Popular', newThisWeek: true,
+  { code: 'en-us', name: 'English (US)', rowLabel: 'English (US)', lang: 'en', region: 'US', types: ['movie', 'series'], newThisWeek: true,
     services: ['netflix', 'prime', 'disney', 'hbomax', 'hulu', 'appletv', 'paramount', 'peacock'] },
 ];
 
