@@ -101,7 +101,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.7.1',
+  version: '2.7.2',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -724,10 +724,10 @@ function weekList(row, apiKey) {
       meta._added = added;
       return meta;
     });
-    // Indian rows: most recent arrival first. English: most popular first (as the other English rows).
+    // Most recent arrival first (most popular first within a day).
     const english = row.edition.lang === 'en';
     const byDate = (a, b) => (a._added < b._added ? 1 : a._added > b._added ? -1 : b._pop - a._pop);
-    const list = metas.sort(english ? (a, b) => b._pop - a._pop : byDate).slice(0, english ? EN_WEEK_MAX : undefined);
+    const list = metas.sort(byDate).slice(0, english ? EN_WEEK_MAX : undefined);
     const failed = parts.reduce((n, p) => n + p.failed, 0);
     weekStats.set(row.id, {
       at: new Date().toISOString(),
