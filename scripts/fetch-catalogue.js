@@ -95,7 +95,7 @@ async function main() {
   let failed = 0;
   // Indian languages only: the English catalogues are too big for TMDB to list in full, so the
   // English New This Week rows use the release-date rule instead.
-  for (const e of EDITIONS.filter((x) => x.newThisWeek && x.lang !== 'en')) {
+  for (const e of EDITIONS.filter((x) => (x.newThisWeek || x.single) && x.lang !== 'en')) {
     for (const type of e.types) {
       for (const service of e.services) {
         const key = `${e.region}:${e.lang}:${type}:${service}`;

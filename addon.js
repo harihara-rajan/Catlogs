@@ -61,9 +61,21 @@ const ROWS = EDITIONS.flatMap((e) => [
       edition: e,
       serviceKey: key,
       service: SERVICES[key][e.region],
+      hidden: !!e.single, // single-row tick boxes: only reached through the row's dropdown
     }))
   ),
 ]);
+// Single-row tick boxes (Telugu): one row per type with all the services together (te-movie), plus
+// two rows that aren't installed: all services as one (te-any-movie, for Popular / Top rated) and
+// their recent arrivals (te-new-movie).
+for (const e of EDITIONS.filter((x) => x.single)) {
+  const union = (field) => [...new Set(e.services.flatMap((k) => SERVICES[k][e.region][field]))];
+  for (const type of e.types) {
+    ROWS.push({ id: `${e.code}-${type}`, type, name: e.rowLabel || e.name, edition: e, all: true });
+    ROWS.push({ id: `${e.code}-any-${type}`, type, name: e.name, edition: e, hidden: true, service: { ids: union('ids'), jw: union('jw') } });
+    ROWS.push({ id: `${e.code}-new-${type}`, type, name: e.name, edition: e, hidden: true, newWeek: true });
+  }
+}
 // English: one shared "New This Week · English" row per type (en-new-movie, en-new-series) covering
 // the services of both English tick boxes (India and US); shown if either box has it switched on.
 const EN_WEEK_EDITIONS = EDITIONS.filter((e) => e.lang === 'en' && e.newThisWeek);
@@ -73,7 +85,7 @@ if (EN_WEEK_EDITIONS.length) {
   }
 }
 // One "Hidden Gems" movies row per tick box, e.g. ta-gems-movie.
-for (const e of EDITIONS) {
+for (const e of EDITIONS.filter((x) => !x.single)) {
   ROWS.push({ id: `${e.code}-gems-movie`, type: 'movie', name: `Hidden Gems · ${e.rowLabel || e.name}`, edition: e, gems: true });
 }
 // One movies row per "dubbed" tick box, e.g. ta-dub-movie.
@@ -82,7 +94,10 @@ for (const e of DUB_EDITIONS) {
 }
 const ROW_BY_ID = new Map(ROWS.map((r) => [r.id, r]));
 // The row's default sort goes first in its dropdown.
+const ALL_SORTS = ['Newest arrivals', 'Popular', 'Top rated'];
+const allOptions = (e) => [...ALL_SORTS, ...e.services.map((k) => SERVICES[k].name)];
 function catalogEntry(r, options) {
+  if (r.all) return { type: r.type, id: r.id, name: r.name, extra: [{ name: 'genre', options: allOptions(r.edition) }, { name: 'skip' }] };
   if (r.newWeek) return { type: r.type, id: r.id, name: r.name }; // one page, no dropdown
   if (r.gems) return { type: r.type, id: r.id, name: r.name, extra: [{ name: 'skip' }] }; // no dropdown
   const first = r.edition.defaultSort || 'Newest';
@@ -101,7 +116,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.7.3',
+  version: '2.8.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -143,7 +158,7 @@ function chipsFrom(config) {
 
 // Chips a tick box offers on the install page: New This Week (if it has it), then its services.
 function chipsOf(e) {
-  if (e.audio) return [];
+  if (e.audio || e.single) return [];
   return [
     ...(e.newThisWeek ? [{ key: 'new', name: 'New This Week', types: e.types }] : []),
     { key: 'gems', name: 'Hidden Gems', types: ['movie'] },
@@ -155,7 +170,7 @@ function rowChosen(r, chips) {
   if (r.editions) return r.editions.some((edition) => rowChosen({ ...r, editions: undefined, edition }, chips));
   const set = chips[r.edition.code];
   if (set === undefined) return false; // tick box not chosen
-  if (set === null || r.dub) return true; // all rows
+  if (set === null || r.dub || r.all) return true; // all rows
   const key = r.newWeek ? 'new' : r.gems ? 'gems' : r.serviceKey;
   return set.has(key) || set.has(`${key}:${r.type === 'movie' ? 'm' : 's'}`);
 }
@@ -170,8 +185,8 @@ function manifestFor(config) {
   const hasKey = ENV_KEY || (config && config.tmdbApiKey);
   m.behaviorHints = { configurable: true, configurationRequired: !hasKey };
   // All "New This Week" rows go to the very top, then every other row in its usual order.
-  let chosen = ROWS.filter((r) => rowChosen(r, chips));
-  if (!chosen.length) chosen = ROWS.filter((r) => (r.editions || [r.edition]).some((e) => codes.includes(e.code))); // nothing valid picked: all
+  let chosen = ROWS.filter((r) => !r.hidden && rowChosen(r, chips));
+  if (!chosen.length) chosen = ROWS.filter((r) => !r.hidden && (r.editions || [r.edition]).some((e) => codes.includes(e.code))); // nothing valid picked: all
   // New This Week rows first, then Hidden Gems, then the rest.
   const rows = [...chosen.filter((r) => r.newWeek), ...chosen.filter((r) => r.gems), ...chosen.filter((r) => !r.newWeek && !r.gems)];
   const fits = () => Buffer.byteLength(JSON.stringify(m)) <= MAX_MANIFEST;
@@ -244,6 +259,7 @@ async function toMeta(item, type, apiKey, knownImdb) {
 }
 
 const clean = ({ _tmdb, _date, ...meta }) => meta;
+const cleanMeta = clean;
 
 // Titles in this row's language that JustWatch says arrived on this service in the last week.
 // These usually reach TMDB a day or so later; until then they're merged in here.
@@ -441,10 +457,12 @@ async function getSearchCatalog(type, query, region, apiKey) {
 // Country used for "where to watch" in search: India unless only US rows are installed.
 const searchRegion = (config) => (TICK_BOXES.some((e) => languagesFrom(config).includes(e.code) && e.region === 'IN') ? 'IN' : 'US');
 
-async function getCatalog(type, id, extra, apiKey) {
+async function getCatalog(type, id, extra, apiKey, raw = false) {
   const row = ROW_BY_ID.get(id);
   if (!row || row.type !== type || !apiKey) return { metas: [], partial: false };
+  if (row.all) return getAllCatalog(row, extra, apiKey);
   if (row.dub) return getDubCatalog(row, extra, apiKey);
+  const clean = raw ? (m) => m : cleanMeta;
   if (row.newWeek) return getWeekCatalog(row, extra, apiKey);
   if (row.gems) return getGemsCatalog(row, extra, apiKey);
   const choice = (extra && extra.genre) || row.edition.defaultSort || 'Newest';
@@ -494,6 +512,51 @@ async function getCatalog(type, id, extra, apiKey) {
   extra_ = extra_.filter((a) => a._date >= oldest);
   const merged = [...listed, ...extra_].sort((a, b) => (a._date < b._date ? 1 : a._date > b._date ? -1 : 0));
   return { metas: (await markNew(row, merged)).map(clean), partial };
+}
+
+// Single-row tick boxes (Telugu): default "Newest arrivals" = titles that arrived on any of the
+// services in the last 7 days (most recent first, as New This Week), then everything else newest
+// release first; "Popular" / "Top rated" across all the services; or one service's list. Rows that
+// mix services get a tag on each poster saying where it streams.
+async function getAllCatalog(row, extra, apiKey) {
+  const e = row.edition;
+  const type = row.type;
+  const choice = (extra && extra.genre) || ALL_SORTS[0];
+  const skip = Number((extra && extra.skip) || 0);
+  const key = e.services.find((k) => SERVICES[k].name === choice);
+  if (key) return getCatalog(type, `${e.code}-${key}-${type}`, { skip }, apiKey); // one service: as its own row
+  const anyId = `${e.code}-any-${type}`;
+  if (choice !== ALL_SORTS[0]) {
+    const { metas, partial } = await getCatalog(type, anyId, { genre: choice, skip }, apiKey, true);
+    return { metas: (await tagServices(e, type, metas, apiKey)).map(clean), partial };
+  }
+  const arrived = (await within(8000, weekList(ROW_BY_ID.get(`${e.code}-new-${type}`), apiKey), null)) || [];
+  const a = arrived.length;
+  // Later pages: the "everything else" list, shifted by the arrivals shown on the first page.
+  const restSkip = skip === 0 ? 0 : Math.ceil(Math.max(0, skip - a) / PAGE_SIZE) * PAGE_SIZE;
+  const { metas: rest, partial } = await getCatalog(type, anyId, { genre: 'Newest', skip: restSkip }, apiKey, true);
+  const shown = new Set(arrived.map((m) => m.id));
+  const restTagged = await tagServices(e, type, rest.filter((m) => !shown.has(m.id)), apiKey);
+  const first = skip === 0 ? arrived.map(({ _added, _pop, ...m }) => m) : [];
+  return { metas: [...first, ...restTagged].map(clean), partial };
+}
+
+// Adds m._services (where each title streams, among the tick box's services) for a poster tag.
+async function tagServices(e, type, metas, apiKey) {
+  return Promise.all(
+    metas.map(async (m) => {
+      if (m._services || !m._tmdb) return m;
+      try {
+        const d = await tmdb.detailsFull(type, m._tmdb, apiKey);
+        const where = (d['watch/providers'] && d['watch/providers'].results && d['watch/providers'].results[e.region]) || {};
+        const ids = new Set([...(where.flatrate || []), ...(where.free || []), ...(where.ads || [])].map((p) => p.provider_id));
+        m._services = e.services.filter((k) => SERVICES[k][e.region].ids.some((i) => ids.has(i)));
+      } catch (err) {
+        /* no tag */
+      }
+      return m;
+    })
+  );
 }
 
 // Public address of this server, for badged poster links (Render sets RENDER_EXTERNAL_URL).

@@ -8,6 +8,7 @@ language and service. You pick the languages on the install page (`/configure`):
 | Tamil           | India   | Prime Video · aha · Netflix · SonyLIV · Sun NXT · JioHotstar · ZEE5 |
 | Malayalam       | India   | Prime Video · Netflix · SonyLIV · JioHotstar · ZEE5 · ManoramaMAX (movies only) |
 | Hindi           | India   | Prime Video · Netflix · SonyLIV · JioHotstar · ZEE5 |
+| Telugu          | India   | One movies row for aha · Prime Video · Netflix · JioHotstar · ZEE5 · Sun NXT · SonyLIV together |
 | English (India) | India   | Netflix · Prime Video · JioHotstar · Apple TV · SonyLIV · Lionsgate Play |
 | English (US)    | US      | Netflix · Prime Video · Disney+ · HBO Max · Hulu · Apple TV · Paramount+ · Peacock |
 | Tamil dubbed (Malayalam & Hindi) | India | One movies row: Malayalam and Hindi films with a Tamil audio track on Prime Video · JioHotstar · SonyLIV · ZEE5 · aha |
@@ -86,6 +87,11 @@ stream (e.g. Celebrity MasterChef Tamil on Sony VIZHA / SonyLIV). So series rows
 shows from the last 2 years whose TMDB network is that service or one of its channels
 (`networks` in `services.js`: Sony VIZHA → SonyLIV, STAR Vijay → JioHotstar, Zee Tamil → ZEE5, Sun
 TV → Sun NXT, …), slotted in by date in the newest-first view.
+
+**Telugu** is a single row (`te-movie`): titles that arrived on any of its services in the last 7
+days first (most recent arrival first, with service tag and NEW), then everything else newest
+release first. Its dropdown (in Discover) offers Popular and Top rated across all the services, or
+one service's list.
 
 ## Search
 

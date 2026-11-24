@@ -29,7 +29,9 @@ const SERVICES = {
 // language, `region` = country whose streaming catalogues are used, `defaultSort` = how rows are
 // ordered when nothing is picked in the dropdown (Newest if not set), `newThisWeek` = also add
 // "New This Week" rows (titles that arrived on any of the services in the last 7 days).
-// Every tick box also gets a "Hidden Gems" movies row (see GEMS in addon.js).
+// Every tick box also gets a "Hidden Gems" movies row (see GEMS in addon.js). `single` = just one
+// row for the whole tick box (all its services together, newest arrivals first; a dropdown picks
+// a service or another order).
 const EDITIONS = [
   { code: 'ta', name: 'Tamil', lang: 'ta', region: 'IN', types: ['movie', 'series'], newThisWeek: true,
     services: ['prime', 'aha', 'netflix', 'sonyliv', 'sunnxt', 'jiohotstar', 'zee5'] },
@@ -37,6 +39,8 @@ const EDITIONS = [
     services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5', 'manoramamax'] },
   { code: 'hi', name: 'Hindi', lang: 'hi', region: 'IN', types: ['movie', 'series'], newThisWeek: true,
     services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5'] },
+  { code: 'te', name: 'Telugu', lang: 'te', region: 'IN', types: ['movie'], single: true,
+    services: ['aha', 'prime', 'netflix', 'jiohotstar', 'zee5', 'sunnxt', 'sonyliv'] },
   { code: 'en-in', name: 'English (India)', rowLabel: 'English (IN)', lang: 'en', region: 'IN', types: ['movie', 'series'], newThisWeek: true,
     services: ['netflix', 'prime', 'jiohotstar', 'appletv', 'sonyliv', 'lionsgate'] },
   { code: 'en-us', name: 'English (US)', rowLabel: 'English (US)', lang: 'en', region: 'US', types: ['movie', 'series'], newThisWeek: true,
