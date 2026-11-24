@@ -65,14 +65,14 @@ const ROWS = EDITIONS.flatMap((e) => [
     }))
   ),
 ]);
-// Single-row tick boxes (Telugu): one row per type with all the services together (te-movie), plus
+// Single-row tick boxes (Telugu, Hindi): one row per type with all the services together (te-movie), plus
 // two rows that aren't installed: all services as one (te-any-movie, for Popular / Top rated) and
 // their recent arrivals (te-new-movie).
 for (const e of EDITIONS.filter((x) => x.single)) {
-  const union = (field) => [...new Set(e.services.flatMap((k) => SERVICES[k][e.region][field]))];
+  const union = (field) => [...new Set(e.services.flatMap((k) => SERVICES[k][e.region][field] || []))];
   for (const type of e.types) {
     ROWS.push({ id: `${e.code}-${type}`, type, name: e.rowLabel || e.name, edition: e, all: true });
-    ROWS.push({ id: `${e.code}-any-${type}`, type, name: e.name, edition: e, hidden: true, service: { ids: union('ids'), jw: union('jw') } });
+    ROWS.push({ id: `${e.code}-any-${type}`, type, name: e.name, edition: e, hidden: true, service: { ids: union('ids'), jw: union('jw'), networks: union('networks') } });
     ROWS.push({ id: `${e.code}-new-${type}`, type, name: e.name, edition: e, hidden: true, newWeek: true });
   }
 }
@@ -116,7 +116,7 @@ const PUBLIC_BASE = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL |
 // Base manifest. server.js sends each install its own version via manifestFor().
 const manifest = {
   id: 'community.tamil.ott.catalogs',
-  version: '2.8.0',
+  version: '2.9.0',
   name: 'Tamil OTT Catalogs',
   description: 'Tamil movies and series on streaming services, newest first. Data: TMDB and JustWatch.',
   logo: `${PUBLIC_BASE}/logo.png`,
@@ -188,7 +188,10 @@ function manifestFor(config) {
   let chosen = ROWS.filter((r) => !r.hidden && rowChosen(r, chips));
   if (!chosen.length) chosen = ROWS.filter((r) => !r.hidden && (r.editions || [r.edition]).some((e) => codes.includes(e.code))); // nothing valid picked: all
   // New This Week rows first, then Hidden Gems, then the rest.
-  const rows = [...chosen.filter((r) => r.newWeek), ...chosen.filter((r) => r.gems), ...chosen.filter((r) => !r.newWeek && !r.gems)];
+  // The rest keep the tick boxes' order (so Hindi and Telugu sit between Malayalam and English).
+  const order = (r) => { const i = TICK_BOXES.indexOf(r.edition); return i < 0 ? TICK_BOXES.length : i; };
+  const rest = chosen.filter((r) => !r.newWeek && !r.gems).map((r, i) => [r, i]).sort((a, b) => order(a[0]) - order(b[0]) || a[1] - b[1]).map(([r]) => r);
+  const rows = [...chosen.filter((r) => r.newWeek), ...chosen.filter((r) => r.gems), ...rest];
   const fits = () => Buffer.byteLength(JSON.stringify(m)) <= MAX_MANIFEST;
   for (const options of DROPDOWN_TIERS) {
     m.catalogs = [...rows.map((r) => catalogEntry(r, options)), ...SEARCH_CATALOGS];

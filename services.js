@@ -37,7 +37,7 @@ const EDITIONS = [
     services: ['prime', 'aha', 'netflix', 'sonyliv', 'sunnxt', 'jiohotstar', 'zee5'] },
   { code: 'ml', name: 'Malayalam', lang: 'ml', region: 'IN', types: ['movie'], newThisWeek: true,
     services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5', 'manoramamax'] },
-  { code: 'hi', name: 'Hindi', lang: 'hi', region: 'IN', types: ['movie', 'series'], newThisWeek: true,
+  { code: 'hi', name: 'Hindi', lang: 'hi', region: 'IN', types: ['movie', 'series'], single: true,
     services: ['prime', 'netflix', 'sonyliv', 'jiohotstar', 'zee5'] },
   { code: 'te', name: 'Telugu', lang: 'te', region: 'IN', types: ['movie'], single: true,
     services: ['aha', 'prime', 'netflix', 'jiohotstar', 'zee5', 'sunnxt', 'sonyliv'] },
